@@ -70,7 +70,14 @@ def main() -> int:
         out_exe = BIN_DIR / "glmquotawatch-gui.exe"
         print(f"=== [3/3] 编译生产版可执行文件 -> {out_exe} ===")
 
-        version = "0.1.0"
+        version = "0.2.0"
+        try:
+            r = subprocess.run(["git", "describe", "--tags", "--exact-match"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, check=True)
+            tag_ver = r.stdout.strip().lstrip("v")
+            if tag_ver:
+                version = tag_ver
+        except Exception:
+            pass
         ldflags = f"-w -s -H windowsgui -X glmquotawatch-gui/internal/cli.Version={version}"
 
         run(
