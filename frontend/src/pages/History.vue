@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // History：高定 ECharts 折线走势 + 精致胶囊选择器 + 拒绝原生糙感下拉
 // 支持 GLM 与 OpenCode Go 历史采样曲线分流与动态主题色呈现
-import { computed, nextTick, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import * as echarts from "echarts";
 import { bindings } from "../api";
 import type { HistoryPoint, HistoryWindow } from "../api";
@@ -21,6 +21,7 @@ const loading = ref(false);
 const empty = ref(false);
 const chartEl = ref<HTMLDivElement | null>(null);
 let chart: echarts.ECharts | null = null;
+let currentPts: HistoryPoint[] = [];
 
 const isOpencode = computed(() => activeProvider.value === "opencode");
 const thresholds = computed(() => store.state?.config?.thresholds ?? [50, 60, 80, 90]);
@@ -42,16 +43,19 @@ async function loadWindows() {
 async function load() {
   if (!winKey.value) {
     empty.value = true;
+    currentPts = [];
     render([]);
     return;
   }
   loading.value = true;
   try {
     const pts = ((await bindings.ReadHistory(winKey.value, hours.value)) ?? []) as HistoryPoint[];
+    currentPts = pts;
     empty.value = pts.length === 0;
     render(pts);
   } catch (e) {
     console.error("read history failed:", e);
+    currentPts = [];
     empty.value = true;
     render([]);
   } finally {
@@ -59,15 +63,38 @@ async function load() {
   }
 }
 
+function ensureChart(): echarts.ECharts | null {
+  if (!chartEl.value) return null;
+  // 如果容器当前不可见（如处于其他 tab，width/height 为 0），暂不初始化避免尺寸塌陷
+  if (chartEl.value.clientWidth === 0 || chartEl.value.clientHeight === 0) {
+    return null;
+  }
+  if (!chart) {
+    chart = echarts.init(chartEl.value);
+  }
+  return chart;
+}
+
 function render(pts: HistoryPoint[]) {
   nextTick(() => {
-    if (!chartEl.value) return;
+    const c = ensureChart();
+    if (!c) return;
+    c.resize();
+    c.setOption(option(pts), true);
+  });
+}
+
+function resizeChart() {
+  if (!chartEl.value) return;
+  if (chartEl.value.clientWidth > 0 && chartEl.value.clientHeight > 0) {
     if (!chart) {
       chart = echarts.init(chartEl.value);
-      ro.observe(chartEl.value);
     }
-    chart.setOption(option(pts), true);
-  });
+    chart.resize();
+    if (currentPts.length > 0) {
+      chart.setOption(option(currentPts), true);
+    }
+  }
 }
 
 function option(pts: HistoryPoint[]): echarts.EChartsOption {
@@ -81,6 +108,13 @@ function option(pts: HistoryPoint[]): echarts.EChartsOption {
         { offset: 0, color: "rgba(13,148,104,0.14)" },
         { offset: 1, color: "rgba(13,148,104,0.01)" },
       ]);
+
+  const seriesData = pts
+    .map((p) => {
+      const t = new Date(p.ts).getTime();
+      return Number.isFinite(t) ? [t, p.pct] : null;
+    })
+    .filter((p): p is [number, number] => p !== null);
 
   return {
     backgroundColor: "transparent",
@@ -118,7 +152,7 @@ function option(pts: HistoryPoint[]): echarts.EChartsOption {
         step: false,
         lineStyle: { color: lineColor, width: 2 },
         areaStyle: { color: areaColor },
-        data: pts.map((p) => [p.ts, p.pct]),
+        data: seriesData,
         markLine: {
           silent: true,
           symbol: "none",
@@ -157,29 +191,43 @@ watch(
     if (store.tab === "history") void load();
   },
 );
-watch(activeProvider, () => {
+watch(activeProvider, async () => {
   winKey.value = "";
-  void reload();
+  await reload();
+  await nextTick();
+  resizeChart();
 });
 watch(
   () => store.tab,
-  (tab) => {
+  async (tab) => {
     if (tab === "history") {
-      void reload().then(() => {
-        nextTick(() => chart?.resize());
-      });
+      await reload();
+      await nextTick();
+      resizeChart();
     }
   },
 );
 
-const ro = new ResizeObserver(() => chart?.resize());
+const ro = new ResizeObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+      resizeChart();
+    }
+  }
+});
+
+onMounted(() => {
+  if (chartEl.value) {
+    ro.observe(chartEl.value);
+  }
+  void reload();
+});
+
 onUnmounted(() => {
   ro.disconnect();
   chart?.dispose();
   chart = null;
 });
-
-void reload();
 </script>
 
 <template>
