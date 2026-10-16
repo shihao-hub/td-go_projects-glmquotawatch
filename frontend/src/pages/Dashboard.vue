@@ -1,10 +1,24 @@
 ﻿<script setup lang="ts">
-// Dashboard：套餐等级概览行 + 非对称主卡 + 沉浸式演示横幅 + 拒绝空洞的去 AI 味文案
+// Dashboard：GLM 仪表盘（浅色 Raycast 语言）与 OpenCode Go 专属仪表盘
+// （暗色 console 语言，作用域 .oc-console）双态分流。
 import { computed, onUnmounted, ref } from "vue";
-import { store, sampleNow, refreshState } from "../store";
+import {
+  store,
+  sampleNow,
+  refreshState,
+  isOpenCodeView,
+  ocHasToken,
+  ocWindows,
+  sampleOpenCodeNow,
+  goOpenCodeSettings,
+} from "../store";
 import { bindings } from "../api";
 import UsageCard from "../components/UsageCard.vue";
+import QuotaRow from "../components/oc/QuotaRow.vue";
+import SampleButton from "../components/oc/SampleButton.vue";
+import EmptyState from "../components/oc/EmptyState.vue";
 
+// 统一秒级时钟：驱动演示倒计时与 OpenCode 重置倒计时（tabular-nums 保证宽度稳定）
 const nowTs = ref(Date.now());
 const timer = window.setInterval(() => (nowTs.value = Date.now()), 1000);
 onUnmounted(() => window.clearInterval(timer));
@@ -26,10 +40,59 @@ async function exitDemo() {
     exiting.value = false;
   }
 }
+
+// ---- OpenCode Go console 视图 ----
+// 骨架与 GLM 视图对齐（控制条：左标题 / 右「上次采样 + 立即采样」），仅皮肤暗色。
+const ocSampledAt = computed(() => {
+  const iso = store.state?.opencode_status?.sampled_at;
+  if (!iso) return "--:--:--";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "--:--:--" : d.toLocaleTimeString();
+});
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-4xl flex-col gap-3.5">
+  <!-- OpenCode Go 仪表盘：与 GLM 同骨架（控制条 + 额度窗口行），皮肤为暗色 console -->
+  <div v-if="isOpenCodeView" class="oc-console relative min-h-full">
+    <div class="oc-glow" aria-hidden="true"></div>
+    <div class="relative mx-auto w-full max-w-[900px] px-6 pt-4 pb-10">
+      <!-- 未配置 Key：居中引导卡（与 GLM 未绑定状态同结构，皮肤暗色）+ 一键跳转设置页 -->
+      <EmptyState v-if="!ocHasToken" @go="goOpenCodeSettings" />
+
+      <template v-else>
+        <!-- 控制条：与 GLM 同骨架（左标题 / 右「上次采样 + 立即采样」） -->
+        <div class="flex items-center justify-between">
+          <span class="oc-mono text-[12px] font-semibold" style="color: var(--oc-text)">
+            配额观测窗口
+          </span>
+          <div class="flex items-center gap-3">
+            <span class="oc-mono tnum text-[11px]" style="color: var(--oc-text-3)">
+              上次采样 {{ ocSampledAt }}
+            </span>
+            <SampleButton icon :busy="store.ocSampleBusy" @click="sampleOpenCodeNow()" />
+          </div>
+        </div>
+
+        <div v-if="ocWindows.length" class="mt-4 flex flex-col gap-7">
+          <QuotaRow v-for="w in ocWindows" :key="w.name" :win="w" :now="nowTs" />
+        </div>
+        <p v-else class="mt-4 text-[12px] leading-5" style="color: var(--oc-text-3)">
+          尚未采样。点击「立即采样」探测滑动、周、月三个窗口的实时额度。
+        </p>
+
+        <p
+          v-if="store.ocError"
+          class="oc-mono mt-4 text-[11px] leading-5"
+          style="color: var(--oc-danger)"
+        >
+          {{ store.ocError }}
+        </p>
+      </template>
+    </div>
+  </div>
+
+  <!-- 既有 GLM 仪表盘（浅色 Raycast 语言，行为与样式零改动） -->
+  <div v-else class="mx-auto flex max-w-4xl flex-col gap-3.5">
     <!-- 演示横幅：紧凑且具象，不再是廉价大黄条 -->
     <div
       v-if="store.state?.mode === 'demo'"

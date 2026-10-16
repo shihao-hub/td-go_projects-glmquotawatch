@@ -73,6 +73,52 @@ func TestConfigRoundTrip(t *testing.T) {
 	}
 }
 
+// TestOpenCodeTokenCompat 双向兼容：旧配置文件（无 opencode_token）解析为空，
+// 新字段存取往返一致，且不影响既有 GLM 字段。
+func TestOpenCodeTokenCompat(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.json"),
+		[]byte(`{"token":"glm-legacy-token-1234567890","interval":"5m","thresholds":[50,60],"hysteresis":5,"silent":false}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	cfg, err := st.LoadConfig()
+	if err != nil {
+		t.Fatalf("旧配置应可解析: %v", err)
+	}
+	if cfg.OpenCodeToken != "" {
+		t.Fatalf("缺失字段应为空: %q", cfg.OpenCodeToken)
+	}
+	if cfg.Token != "glm-legacy-token-1234567890" || cfg.Interval != "5m" {
+		t.Fatalf("既有字段不应受影响: %+v", cfg)
+	}
+
+	cfg.OpenCodeToken = "oc_sk_roundtrip_0123456789"
+	if err := st.SaveConfig(cfg); err != nil {
+		t.Fatalf("SaveConfig: %v", err)
+	}
+	got, err := st.LoadConfig()
+	if err != nil {
+		t.Fatalf("回读: %v", err)
+	}
+	if got.OpenCodeToken != cfg.OpenCodeToken || got.Token != cfg.Token {
+		t.Fatalf("回读不符: %+v", got)
+	}
+
+	// opencode_token 为空时序列化省略（omitempty），旧读取器无感
+	cfg.OpenCodeToken = ""
+	if err := st.SaveConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, "config.json"))
+	if strings.Contains(string(raw), "opencode_token") {
+		t.Fatalf("空值不应落盘 opencode_token: %s", raw)
+	}
+}
+
 func TestConfigCorrupt(t *testing.T) {
 	st, _ := Open(t.TempDir())
 	if err := os.WriteFile(filepath.Join(st.Dir(), "config.json"), []byte("{bad json"), 0o644); err != nil {

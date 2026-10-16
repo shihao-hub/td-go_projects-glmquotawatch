@@ -42,8 +42,15 @@ var commandDocs = map[string]commandDoc{
 		},
 		Output: "ConfigView",
 	},
-	"schema":  {Output: "本契约目录"},
-	"version": {Output: `{"version": "<semver>"}`},
+	"opencode token set": {
+		Args:   []argSpec{{Name: "key", Required: true, Desc: "OpenCode Go API key（形如 oc_sk_...，trim 后长度 ≥ 10）"}},
+		Output: "OpenCodeConfigView（token 前4后4脱敏）",
+	},
+	"opencode token show":   {Output: "OpenCodeConfigView（token 前4后4脱敏）"},
+	"opencode token remove": {Output: "OpenCodeConfigView"},
+	"opencode status":       {Output: "OpenCodeStatusView（sampled_at + rolling/weekly/monthly 三窗口的 status/percent/resets_at/reset_in）"},
+	"schema":                {Output: "本契约目录"},
+	"version":               {Output: `{"version": "<semver>"}`},
 }
 
 // schemaCommand 契约目录中的单条命令。
@@ -81,7 +88,7 @@ func BuildSchemaDoc() (*schemaDoc, error) {
 		Interface: "cli",
 		Envelope: schemaEnvelope{
 			Success:   map[string]any{"ok": true, "data": "<命令对应的结果视图>"},
-			Failure:   map[string]any{"ok": false, "error": map[string]string{"code": "业务错误码（bad_args/bad_value/no_token/api_error/upstream_error/internal/…）", "message": "可公开说明"}},
+			Failure:   map[string]any{"ok": false, "error": map[string]string{"code": "业务错误码（bad_args/bad_value/no_token/api_error/upstream_error/auth_error/entitlement_error/timeout/network_error/internal/…）", "message": "可公开说明"}},
 			ExitCodes: map[string]int{"success": 0, "business_error": 1, "bad_args": 2},
 		},
 		Commands: []schemaCommand{},

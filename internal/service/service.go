@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"glmquotawatch-gui/internal/api"
+	"glmquotawatch-gui/internal/opencode"
 	"glmquotawatch-gui/internal/quota"
 	"glmquotawatch-gui/internal/store"
 )
@@ -86,10 +87,11 @@ func (r sampleResult) view(committed bool) StatusView {
 
 // Service 业务用例集合。
 type Service struct {
-	st             *store.Store
-	baseURL        string
-	fetcherFactory func() api.Fetcher // nil 时默认按 config token 现读构造 Client
-	fixedInterval  time.Duration      // 非零时 daemon 直用该间隔（演示模式），跳过热加载与 clamp
+	st              *store.Store
+	baseURL         string
+	openCodeBaseURL string           // OpenCode Go 上游（空值时用 opencode.DefaultBaseURL）
+	fetcherFactory  func() api.Fetcher // nil 时默认按 config token 现读构造 Client
+	fixedInterval   time.Duration      // 非零时 daemon 直用该间隔（演示模式），跳过热加载与 clamp
 }
 
 // Option Service 构造选项。
@@ -98,6 +100,11 @@ type Option func(*Service)
 // WithBaseURL 覆盖上游 API 地址（测试注入 httptest、将来接国际版）。
 func WithBaseURL(u string) Option {
 	return func(s *Service) { s.baseURL = u }
+}
+
+// WithOpenCodeBaseURL 覆盖 OpenCode Go 上游地址（测试注入 httptest、本地 Mock）。
+func WithOpenCodeBaseURL(u string) Option {
+	return func(s *Service) { s.openCodeBaseURL = u }
 }
 
 // WithFetcherFactory 整体替换数据源（演示模式注入 DemoFetcher、测试注入 fake）。
@@ -122,13 +129,16 @@ func New(st *store.Store, opts ...Option) *Service {
 }
 
 // Open 组装入口用：显式数据目录；上游地址可被环境变量
-// GLMQUOTAWATCH_GUI_API_BASE 覆盖。
+// GLMQUOTAWATCH_GUI_API_BASE / OPENCODE_GO_API_BASE 分别覆盖。
 func Open(dir string, opts ...Option) (*Service, error) {
 	st, err := store.Open(dir)
 	if err != nil {
 		return nil, err
 	}
-	return New(st, append([]Option{WithBaseURL(os.Getenv(api.EnvBaseURL))}, opts...)...), nil
+	return New(st, append([]Option{
+		WithBaseURL(os.Getenv(api.EnvBaseURL)),
+		WithOpenCodeBaseURL(os.Getenv(opencode.EnvBaseURL)),
+	}, opts...)...), nil
 }
 
 // fetcher 返回本轮采样使用的数据源：优先注入的工厂，默认按 config token

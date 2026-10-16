@@ -1,10 +1,11 @@
 ﻿<script setup lang="ts">
 import { onMounted } from "vue";
-import { store, refreshState } from "./store";
+import { store, refreshState, isOpenCodeView } from "./store";
 import { useEvents } from "./composables/useEvents";
 import Dashboard from "./pages/Dashboard.vue";
 import History from "./pages/History.vue";
 import Settings from "./pages/Settings.vue";
+import ProviderSwitch from "./components/oc/ProviderSwitch.vue";
 
 const tabs = [
   { key: "dashboard", label: "仪表盘" },
@@ -12,12 +13,17 @@ const tabs = [
   { key: "settings", label: "偏好配置" },
 ] as const;
 
+// Provider 切换器常驻顶栏：两个 Provider 视图下位置与形态完全一致，
+// 不随切换隐藏或移位（OpenCode 视图内不再有第二套导航与切换器）。
+
 useEvents({
   status: () => void refreshState(),
   "sample-error": () => void refreshState(),
   "notify-error": () => void refreshState(),
   "mode-changed": () => void refreshState(),
   "config-changed": () => void refreshState(),
+  "provider-changed": () => void refreshState(),
+  "opencode-status": () => void refreshState(),
 });
 
 onMounted(() => {
@@ -58,26 +64,32 @@ function lastSample(): string {
         </span>
       </div>
 
-      <!-- Linear 风格精巧分段导航 -->
-      <nav class="flex items-center gap-0.5 rounded-lg border border-edge bg-well/90 p-0.5 shadow-inner">
-        <button
-          v-for="t in tabs"
-          :key="t.key"
-          class="btn-press rounded-[6px] px-3 py-1 text-xs font-medium transition-all"
-          :class="
-            store.tab === t.key
-              ? 'bg-panel text-ink shadow-xs inset-highlight'
-              : 'text-dim hover:text-ink'
-          "
-          @click="store.tab = t.key"
-        >
-          {{ t.label }}
-        </button>
-      </nav>
+      <!-- 右上操作区：Linear 风格精巧分段导航 + Provider 切换 -->
+      <div class="flex items-center gap-3">
+        <nav class="flex items-center gap-0.5 rounded-lg border border-edge bg-well/90 p-0.5 shadow-inner">
+          <button
+            v-for="t in tabs"
+            :key="t.key"
+            class="btn-press rounded-[6px] px-3 py-1 text-xs font-medium transition-all"
+            :class="
+              store.tab === t.key
+                ? 'bg-panel text-ink shadow-xs inset-highlight'
+                : 'text-dim hover:text-ink'
+            "
+            @click="store.tab = t.key"
+          >
+            {{ t.label }}
+          </button>
+        </nav>
+        <ProviderSwitch />
+      </div>
     </header>
 
-    <!-- 主展示区 -->
-    <main class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+    <!-- 主展示区：OpenCode console 视图全幅暗色，其余页面沿用浅色内边距 -->
+    <main
+      class="min-h-0 flex-1 overflow-y-auto"
+      :class="isOpenCodeView ? '' : 'px-5 py-4'"
+    >
       <Dashboard v-show="store.tab === 'dashboard'" />
       <History v-show="store.tab === 'history'" />
       <Settings v-show="store.tab === 'settings'" />

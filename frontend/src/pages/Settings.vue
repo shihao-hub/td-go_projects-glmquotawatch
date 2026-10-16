@@ -1,20 +1,30 @@
 ﻿<script setup lang="ts">
 // Settings：Linear 风格紧凑型配置列表——分组面板、内联操作、去模板化的友好表单与就地反馈
-import { computed, reactive } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import { bindings } from "../api";
 import { store, refreshState, isDemo } from "../store";
 
 const cfg = computed(() => store.state?.config ?? null);
+const oc = computed(() => store.state?.opencode_config ?? null);
 const readonly = computed(() => isDemo.value);
 
 const form = reactive({
   token: "",
+  ocToken: "",
   interval: "",
   thresholds: "",
   hysteresis: "",
 });
-const busy = reactive({ token: false, cfg: false });
-const msg = reactive({ token: "", interval: "", thresholds: "", hysteresis: "", silent: "", autostart: "" });
+const busy = reactive({ token: false, ocToken: false, cfg: false });
+const msg = reactive({
+  token: "",
+  ocToken: "",
+  interval: "",
+  thresholds: "",
+  hysteresis: "",
+  silent: "",
+  autostart: "",
+});
 
 function errText(e: unknown): string {
   const s = String(e ?? "");
@@ -49,6 +59,46 @@ async function removeToken() {
     busy.token = false;
   }
 }
+
+async function saveOcToken() {
+  if (!form.ocToken.trim()) return;
+  busy.ocToken = true;
+  msg.ocToken = "";
+  try {
+    await bindings.SetOpenCodeToken(form.ocToken);
+    form.ocToken = "";
+    await refreshState();
+  } catch (e) {
+    msg.ocToken = errText(e);
+  } finally {
+    busy.ocToken = false;
+  }
+}
+
+async function removeOcToken() {
+  busy.ocToken = true;
+  msg.ocToken = "";
+  try {
+    await bindings.RemoveOpenCodeToken();
+    await refreshState();
+  } catch (e) {
+    msg.ocToken = errText(e);
+  } finally {
+    busy.ocToken = false;
+  }
+}
+
+// 空状态「前往设置」跳转后聚焦 OpenCode Token 输入框（FR-4 引导卡闭环）
+const ocInput = ref<HTMLInputElement | null>(null);
+watch(
+  () => store.ocFocusToken,
+  async (want) => {
+    if (!want) return;
+    store.ocFocusToken = false;
+    await nextTick();
+    ocInput.value?.focus();
+  },
+);
 
 async function saveKey(key: "interval" | "thresholds" | "hysteresis", value: string) {
   busy.cfg = true;
@@ -142,6 +192,59 @@ async function toggleAutostart() {
         </button>
       </div>
       <p v-if="msg.token" class="mt-1.5 text-[11px] text-crit">{{ msg.token }}</p>
+    </div>
+
+    <!-- 分组一·二：OpenCode Go 凭证（独立于 GLM，探测 opencode.ai 套餐额度） -->
+    <div class="rounded-2xl border border-edge bg-panel p-4 shadow-card inset-highlight">
+      <div class="flex items-center justify-between border-b border-edge/60 pb-3">
+        <div>
+          <h2 class="text-xs font-semibold text-ink">OpenCode Go 凭证</h2>
+          <p class="mt-0.5 text-[11px] text-faint">
+            用于「OpenCode Go」套餐额度探测（opencode.ai），与 GLM 凭据相互独立。
+          </p>
+        </div>
+        <span
+          v-if="oc?.has_token && oc?.token"
+          class="rounded-md border border-brand/20 bg-brand-light px-2 py-0.5 text-[11px] font-medium text-brand-deep tnum"
+        >
+          已载入 {{ oc?.token }}
+        </span>
+        <span
+          v-else-if="oc?.has_token"
+          class="rounded-md border border-edge bg-well px-2 py-0.5 text-[11px] font-medium text-dim"
+        >
+          由环境变量提供
+        </span>
+        <span v-else class="text-[11px] text-faint">凭据未登记</span>
+      </div>
+
+      <div class="mt-3 flex gap-2">
+        <input
+          ref="ocInput"
+          v-model="form.ocToken"
+          type="password"
+          placeholder="粘贴 OpenCode Go API Key（形如 oc_sk_…，不少于 10 字符）"
+          class="min-w-0 flex-1 rounded-lg border border-edge bg-well/60 px-3 py-1.5 text-xs text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-panel transition-all disabled:opacity-50"
+          :disabled="readonly || busy.ocToken"
+          @keyup.enter="saveOcToken"
+        />
+        <button
+          class="btn-press rounded-lg bg-brand px-3.5 py-1.5 text-xs font-medium text-white shadow-xs hover:bg-brand-deep disabled:opacity-50"
+          :disabled="readonly || busy.ocToken || !form.ocToken.trim()"
+          @click="saveOcToken"
+        >
+          {{ busy.ocToken ? "保存中…" : "更新凭据" }}
+        </button>
+        <button
+          v-if="oc?.token"
+          class="btn-press rounded-lg border border-edge-strong bg-panel px-3 py-1.5 text-xs font-medium text-dim hover:bg-panel-hover disabled:opacity-50"
+          :disabled="readonly || busy.ocToken"
+          @click="removeOcToken"
+        >
+          移除
+        </button>
+      </div>
+      <p v-if="msg.ocToken" class="mt-1.5 text-[11px] text-crit">{{ msg.ocToken }}</p>
     </div>
 
     <!-- 分组二：轮询与告警策略 -->

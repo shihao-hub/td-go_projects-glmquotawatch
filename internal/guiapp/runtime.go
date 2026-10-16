@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"glmquotawatch-gui/internal/api"
+	"glmquotawatch-gui/internal/opencode"
 	"glmquotawatch-gui/internal/service"
 	"glmquotawatch-gui/internal/store"
 
@@ -27,13 +29,21 @@ const (
 	ModeDemo   = "demo"
 )
 
+// Provider 常量（前端 Provider 切换器）。
+const (
+	ProviderGLM      = "glm"
+	ProviderOpenCode = "opencode"
+)
+
 // 事件名常量（前端 Events.On 使用同一组名字）。
 const (
-	EventStatus    = "status"
-	EventSampleErr = "sample-error"
-	EventNotifyErr = "notify-error"
-	EventMode      = "mode-changed"
-	EventConfig    = "config-changed"
+	EventStatus       = "status"
+	EventSampleErr    = "sample-error"
+	EventNotifyErr    = "notify-error"
+	EventMode         = "mode-changed"
+	EventConfig       = "config-changed"
+	EventProvider     = "provider-changed"
+	EventOpenCodeStat = "opencode-status"
 )
 
 // uiBridge runtime → GUI 外观的单向更新接口（App 实现；测试可注入 fake）。
@@ -69,14 +79,16 @@ type MonitorRuntime struct {
 	ns  *notifications.NotificationService
 	ui  uiBridge
 
-	mu         sync.Mutex
-	mode       string
-	svc        *service.Service
-	cancel     context.CancelFunc
-	done       chan struct{}
-	lastStatus *service.StatusView
-	lastErr    *ErrInfo
-	demoEndsAt time.Time
+	mu             sync.Mutex
+	mode           string
+	svc            *service.Service
+	cancel         context.CancelFunc
+	done           chan struct{}
+	lastStatus     *service.StatusView
+	lastErr        *ErrInfo
+	demoEndsAt     time.Time
+	activeProvider string
+	lastOpenCode   *service.OpenCodeStatusView
 }
 
 // ErrInfo 前端错误态结构。
@@ -88,9 +100,10 @@ type ErrInfo struct {
 // newMonitorRuntime 构造运行时（Start 之前不触碰任何数据目录）。
 func newMonitorRuntime(app *application.App, ns *notifications.NotificationService) *MonitorRuntime {
 	return &MonitorRuntime{
-		app:  app,
-		ns:   ns,
-		mode: ModeNormal,
+		app:            app,
+		ns:             ns,
+		mode:           ModeNormal,
+		activeProvider: ProviderGLM,
 	}
 }
 
@@ -207,7 +220,8 @@ func (r *MonitorRuntime) EnterDemo() error {
 	r.mode = ModeDemo
 	r.svc = service.New(demoStore,
 		service.WithFetcherFactory(func() api.Fetcher { return fetcher }),
-		service.WithFixedInterval(5*time.Second))
+		service.WithFixedInterval(5*time.Second),
+		service.WithOpenCodeBaseURL(os.Getenv(opencode.EnvBaseURL)))
 	r.lastErr = nil
 	r.demoEndsAt = time.Now().Add(api.DemoRealDuration)
 	r.startDaemonLocked()
@@ -366,6 +380,41 @@ func (r *MonitorRuntime) SampleNow() (service.StatusView, error) {
 	return view, nil
 }
 
+// SetActiveProvider 切换前端 Provider（glm / opencode）；未识别值报 bad_args。
+func (r *MonitorRuntime) SetActiveProvider(provider string) error {
+	if provider != ProviderGLM && provider != ProviderOpenCode {
+		return &service.Error{Code: "bad_args", Message: fmt.Sprintf("未知 Provider %q，仅支持 glm / opencode", provider)}
+	}
+	r.mu.Lock()
+	r.activeProvider = provider
+	r.mu.Unlock()
+	r.app.Event.Emit(EventProvider, map[string]string{"provider": provider})
+	return nil
+}
+
+// SampleOpenCodeNow 立即探测一次 OpenCode Go 用量（真实网络；不落历史、不告警）。
+// 结果缓存进快照并广播 opencode-status 事件，供 GetState 与事件订阅消费。
+func (r *MonitorRuntime) SampleOpenCodeNow() (service.OpenCodeStatusView, error) {
+	r.mu.Lock()
+	svc := r.svc
+	r.mu.Unlock()
+	if svc == nil {
+		return service.OpenCodeStatusView{}, errors.New("internal: 监控未启动")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	view, err := svc.SampleOpenCodeOnce(ctx)
+	if err != nil {
+		return service.OpenCodeStatusView{}, err
+	}
+	r.mu.Lock()
+	v := view
+	r.lastOpenCode = &v
+	r.mu.Unlock()
+	r.app.Event.Emit(EventOpenCodeStat, v)
+	return view, nil
+}
+
 // ToggleSilent 切换静音（托盘菜单用）；demo 模式拒绝写。
 func (r *MonitorRuntime) ToggleSilent() error {
 	r.mu.Lock()
@@ -428,6 +477,7 @@ func (r *MonitorRuntime) Snapshot() GUIState {
 		Mode:             r.mode,
 		DemoTotalSeconds: int(api.DemoRealDuration.Seconds()),
 		Autostart:        autostartEnabled(r.app),
+		ActiveProvider:   r.activeProvider,
 	}
 	if r.lastStatus != nil {
 		v := *r.lastStatus
@@ -437,10 +487,16 @@ func (r *MonitorRuntime) Snapshot() GUIState {
 		e := *r.lastErr
 		st.LastError = &e
 	}
+	if r.lastOpenCode != nil {
+		v := *r.lastOpenCode
+		st.OpenCodeStatus = &v
+	}
 	if r.svc != nil {
 		if cfg, err := r.svc.GetConfig(); err == nil {
 			st.Config = &cfg
 		}
+		oc := r.svc.GetOpenCodeConfig()
+		st.OpenCodeConfig = &oc
 	}
 	if r.mode == ModeDemo {
 		st.DemoEndsAt = r.demoEndsAt.Format(time.RFC3339)

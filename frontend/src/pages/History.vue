@@ -4,7 +4,7 @@ import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import * as echarts from "echarts";
 import { bindings } from "../api";
 import type { HistoryPoint, HistoryWindow } from "../api";
-import { store, isDemo } from "../store";
+import { store, isDemo, activeProvider } from "../store";
 
 const windows = ref<HistoryWindow[]>([]);
 const winKey = ref("");
@@ -143,7 +143,34 @@ void reload();
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-4xl flex-col gap-3.5">
+  <!-- 历史走势为 GLM 专属数据页：OpenCode Provider 下第一步无历史记录（spec Out of Scope），
+       展示明确空状态避免与 GLM 曲线混淆（结构与 GLM 未绑定引导卡一致） -->
+  <div v-if="activeProvider === 'opencode'" class="mx-auto flex max-w-4xl flex-col gap-3.5">
+    <div
+      class="flex flex-col items-center justify-center rounded-2xl border border-edge-strong bg-panel px-6 py-12 text-center shadow-card inset-highlight"
+    >
+      <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-well text-dim shadow-inner">
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        </svg>
+      </div>
+      <h3 class="mt-3 text-sm font-semibold text-ink">OpenCode Go 暂未记录历史走势</h3>
+      <p class="mt-1 max-w-sm text-xs text-dim">
+        第一步仅提供即时采样与实时额度查看，历史轨迹收集将在后续迭代提供。
+      </p>
+      <button
+        class="btn-press mt-5 inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-medium text-white shadow-subtle hover:bg-brand-deep"
+        @click="store.tab = 'dashboard'"
+      >
+        <span>返回仪表盘采样</span>
+        <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M5 12h14M12 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div v-else class="mx-auto flex max-w-4xl flex-col gap-3.5">
     <!-- 过滤器栏：Linear 式胶囊切换 -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-1.5">

@@ -18,13 +18,16 @@ var (
 
 // GUIState 前端初始化/刷新的全量状态快照。
 type GUIState struct {
-	Mode             string              `json:"mode"` // normal | demo
-	Status           *service.StatusView `json:"status"`
-	LastError        *ErrInfo            `json:"last_error"`
-	Config           *service.ConfigView `json:"config"`
-	DemoEndsAt       string              `json:"demo_ends_at,omitempty"` // RFC3339
-	DemoTotalSeconds int                 `json:"demo_total_seconds"`
-	Autostart        bool                `json:"autostart"`
+	Mode             string                       `json:"mode"` // normal | demo
+	Status           *service.StatusView          `json:"status"`
+	LastError        *ErrInfo                     `json:"last_error"`
+	Config           *service.ConfigView          `json:"config"`
+	ActiveProvider   string                       `json:"active_provider"` // "glm" | "opencode"
+	OpenCodeStatus   *service.OpenCodeStatusView  `json:"opencode_status"`
+	OpenCodeConfig   *service.OpenCodeConfigView  `json:"opencode_config"`
+	DemoEndsAt       string                       `json:"demo_ends_at,omitempty"` // RFC3339
+	DemoTotalSeconds int                          `json:"demo_total_seconds"`
+	Autostart        bool                         `json:"autostart"`
 }
 
 // BindingsService 前端可调用方法的宿主（wails3 生成 TS bindings）。
@@ -87,6 +90,44 @@ func (b *BindingsService) SetConfig(key, value string) (service.ConfigView, erro
 func (b *BindingsService) SetSilent(silent bool) error {
 	_, err := b.SetConfig("silent", boolStr(silent))
 	return err
+}
+
+// SetActiveProvider 切换 Provider（glm / opencode）。
+func (b *BindingsService) SetActiveProvider(provider string) error {
+	return b.rt.SetActiveProvider(provider)
+}
+
+// SampleOpenCodeNow 立即探测一次 OpenCode Go 用量（真实网络；不落历史）。
+func (b *BindingsService) SampleOpenCodeNow() (service.OpenCodeStatusView, error) {
+	return b.rt.SampleOpenCodeNow()
+}
+
+// SetOpenCodeToken 配置 OpenCode Go API key。
+func (b *BindingsService) SetOpenCodeToken(token string) (service.OpenCodeConfigView, error) {
+	svc, err := b.rt.CurrentService()
+	if err != nil {
+		return service.OpenCodeConfigView{}, err
+	}
+	if err := b.requireNormal(); err != nil {
+		return service.OpenCodeConfigView{}, err
+	}
+	view, err := svc.SetOpenCodeToken(token)
+	b.emitConfig(err == nil)
+	return view, err
+}
+
+// RemoveOpenCodeToken 清除 OpenCode Go API key（幂等）。
+func (b *BindingsService) RemoveOpenCodeToken() (service.OpenCodeConfigView, error) {
+	svc, err := b.rt.CurrentService()
+	if err != nil {
+		return service.OpenCodeConfigView{}, err
+	}
+	if err := b.requireNormal(); err != nil {
+		return service.OpenCodeConfigView{}, err
+	}
+	view, err := svc.RemoveOpenCodeToken()
+	b.emitConfig(err == nil)
+	return view, err
 }
 
 // ReadHistory 读取指定窗口的历史百分比序列（24h / 7d 白名单）。

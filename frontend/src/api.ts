@@ -11,4 +11,7 @@ export type {
   WindowView,
   HistoryPoint,
   HistoryWindow,
+  OpenCodeConfigView,
+  OpenCodeStatusView,
+  OpenCodeWindowView,
 } from "../bindings/glmquotawatch-gui/internal/service/models.js";

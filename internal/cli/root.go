@@ -79,6 +79,7 @@ func newRootCmd() *cobra.Command {
 		tokenCmd(),
 		statusCmd(),
 		configCmd(),
+		opencodeCmd(),
 		schemaCmd(),
 		versionCmd(),
 	)

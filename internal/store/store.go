@@ -22,11 +22,12 @@ import (
 // Config 工具配置（config.json）。业务校验（时长/阈值范围等）在 service 层，
 // 本包只负责存取。
 type Config struct {
-	Token      string `json:"token"`
-	Interval   string `json:"interval"`   // time.Duration 字符串，如 "5m"
-	Thresholds []int  `json:"thresholds"` // 告警阈值（升序去重，1..99）
-	Hysteresis int    `json:"hysteresis"` // 滞回百分点：低于 min-thresholds-hysteresis 才重置告警记录
-	Silent     bool   `json:"silent"`     // true 时通知静音（仍发送，无声）
+	Token         string `json:"token"`
+	OpenCodeToken string `json:"opencode_token,omitempty"` // OpenCode Go API key（独立于 GLM token）
+	Interval      string `json:"interval"`                 // time.Duration 字符串，如 "5m"
+	Thresholds    []int  `json:"thresholds"`               // 告警阈值（升序去重，1..99）
+	Hysteresis    int    `json:"hysteresis"`               // 滞回百分点：低于 min-thresholds-hysteresis 才重置告警记录
+	Silent        bool   `json:"silent"`                   // true 时通知静音（仍发送，无声）
 }
 
 // DefaultConfig 返回默认配置。
