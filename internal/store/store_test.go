@@ -1,4 +1,4 @@
-﻿package store
+package store
 
 import (
 	"encoding/json"
@@ -212,5 +212,26 @@ func TestResetDirGuard(t *testing.T) {
 		if err := st.ResetDir(bad); err == nil {
 			t.Fatalf("非法目标 %q 应被拒绝", bad)
 		}
+	}
+}
+
+func TestAppendOpenCodeSampleAndList(t *testing.T) {
+	st, _ := Open(t.TempDir())
+
+	t0 := time.Date(2026, 10, 15, 12, 0, 0, 0, time.Local)
+	path, err := st.AppendOpenCodeSample(t0, json.RawMessage(`{"usage":{"rolling":{"percent":5}}}`))
+	if err != nil {
+		t.Fatalf("AppendOpenCodeSample: %v", err)
+	}
+	if !strings.HasSuffix(path, "opencode-samples-2026-10.jsonl") {
+		t.Fatalf("文件名不符: %s", path)
+	}
+
+	files, err := st.ListOpenCodeSampleFiles(t0.AddDate(0, 0, -1))
+	if err != nil {
+		t.Fatalf("ListOpenCodeSampleFiles: %v", err)
+	}
+	if len(files) != 1 || files[0] != path {
+		t.Fatalf("列出结果不符: %+v", files)
 	}
 }

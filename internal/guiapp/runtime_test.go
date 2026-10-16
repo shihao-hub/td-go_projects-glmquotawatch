@@ -27,3 +27,37 @@ func TestSampleOpenCodeNowRequiresService(t *testing.T) {
 		t.Fatalf("未启动时采样应报错")
 	}
 }
+
+func TestBindingsHistoryWindowsOpenCode(t *testing.T) {
+	rt := &MonitorRuntime{activeProvider: ProviderOpenCode}
+	b := &BindingsService{rt: rt}
+	windows, err := b.HistoryWindows()
+	if err != nil {
+		t.Fatalf("OpenCode HistoryWindows 报错: %v", err)
+	}
+	if len(windows) != 3 {
+		t.Fatalf("OpenCode 窗口应为 3 个: %d", len(windows))
+	}
+	if windows[0].Key != "rolling" {
+		t.Fatalf("第一个窗口应为 rolling: %s", windows[0].Key)
+	}
+}
+
+func TestBindingsReadHistoryArgs(t *testing.T) {
+	rt := &MonitorRuntime{activeProvider: ProviderOpenCode}
+	b := &BindingsService{rt: rt}
+
+	// hours 非法
+	_, err := b.ReadHistory("rolling", 10)
+	var se *service.Error
+	if !errors.As(err, &se) || se.Code != "bad_args" {
+		t.Fatalf("hours 非法应 bad_args: %v", err)
+	}
+
+	// 未识别 windowKey
+	_, err = b.ReadHistory("unknown_window", 24)
+	if !errors.As(err, &se) || se.Code != "bad_args" {
+		t.Fatalf("windowKey 非法应 bad_args: %v", err)
+	}
+}
+

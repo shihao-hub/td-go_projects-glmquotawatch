@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -99,7 +100,7 @@ func (s *Service) RemoveOpenCodeToken() (OpenCodeConfigView, error) {
 	return s.openCodeView(cfg), nil
 }
 
-// SampleOpenCodeOnce 立即探测一次 OpenCode Go 用量（真实网络，不落历史、不告警）。
+// SampleOpenCodeOnce 立即探测一次 OpenCode Go 用量（落历史、不发通知）。
 // Token 解析：本地配置优先，为空时回退环境变量 OPENCODE_API_KEY。
 func (s *Service) SampleOpenCodeOnce(ctx context.Context) (OpenCodeStatusView, error) {
 	token, err := s.openCodeToken()
@@ -114,7 +115,17 @@ func (s *Service) SampleOpenCodeOnce(ctx context.Context) (OpenCodeStatusView, e
 	if err != nil {
 		return OpenCodeStatusView{}, mapOpenCodeError(err)
 	}
-	return buildOpenCodeStatusView(usage, time.Now()), nil
+	now := time.Now()
+	if raw, jerr := json.Marshal(usage); jerr == nil {
+		_, _ = s.st.AppendOpenCodeSample(now, raw)
+	}
+	return buildOpenCodeStatusView(usage, now), nil
+}
+
+// HasOpenCodeToken 是否存在可用 token（本地配置或环境变量）。
+func (s *Service) HasOpenCodeToken() bool {
+	t, _ := s.openCodeToken()
+	return t != ""
 }
 
 func (s *Service) openCodeView(cfg store.Config) OpenCodeConfigView {

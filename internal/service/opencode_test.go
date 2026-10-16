@@ -235,3 +235,47 @@ func TestOpenCodeErrorsAreServiceErrors(t *testing.T) {
 		t.Fatalf("错误应为 *service.Error: %v", err)
 	}
 }
+
+func TestSampleOpenCodeHistoryPersistenceAndRead(t *testing.T) {
+	svc := newOpenCodeSvc(t, ocOKHandler(t, ocTestToken))
+	_, err := svc.SetOpenCodeToken(ocTestToken)
+	if err != nil {
+		t.Fatalf("SetOpenCodeToken: %v", err)
+	}
+
+	windows := OpenCodeHistoryWindows()
+	if len(windows) != 3 {
+		t.Fatalf("OpenCodeHistoryWindows 数量应为 3: %d", len(windows))
+	}
+
+	before := time.Now().Add(-time.Second)
+	view, err := svc.SampleOpenCodeOnce(context.Background())
+	if err != nil {
+		t.Fatalf("SampleOpenCodeOnce: %v", err)
+	}
+	if len(view.Windows) != 3 {
+		t.Fatalf("Windows 数量应为 3: %d", len(view.Windows))
+	}
+
+	// 验证三个窗口的持久化历史点
+	for _, tc := range []struct {
+		win     string
+		wantPct int64
+	}{
+		{"rolling", 0},
+		{"weekly", 3},
+		{"monthly", 83},
+	} {
+		pts, rerr := svc.ReadOpenCodeHistory(tc.win, before)
+		if rerr != nil {
+			t.Fatalf("ReadOpenCodeHistory(%s) failed: %v", tc.win, rerr)
+		}
+		if len(pts) != 1 {
+			t.Fatalf("ReadOpenCodeHistory(%s) 应返回 1 个数据点，实际 %d", tc.win, len(pts))
+		}
+		if pts[0].Pct != tc.wantPct {
+			t.Fatalf("ReadOpenCodeHistory(%s) Pct 期望 %d，实际 %d", tc.win, tc.wantPct, pts[0].Pct)
+		}
+	}
+}
+

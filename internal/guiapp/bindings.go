@@ -10,10 +10,11 @@ import (
 	"glmquotawatch-gui/internal/service"
 )
 
-// 历史范围白名单（小时）；windowKey 形如 TOKENS_LIMIT:3:5。
+// 历史范围白名单（小时）；windowKey 形如 TOKENS_LIMIT:3:5 或 OpenCode 窗口 rolling/weekly/monthly。
 var (
-	historyHours = map[int]bool{24: true, 168: true}
-	windowKeyRe  = regexp.MustCompile(`^[A-Z_]+:\d+:\d+$`)
+	historyHours       = map[int]bool{24: true, 168: true}
+	windowKeyRe        = regexp.MustCompile(`^[A-Z_]+:\d+:\d+$`)
+	openCodeWindowKeys = map[string]bool{"rolling": true, "weekly": true, "monthly": true}
 )
 
 // GUIState 前端初始化/刷新的全量状态快照。
@@ -132,21 +133,27 @@ func (b *BindingsService) RemoveOpenCodeToken() (service.OpenCodeConfigView, err
 
 // ReadHistory 读取指定窗口的历史百分比序列（24h / 7d 白名单）。
 func (b *BindingsService) ReadHistory(windowKey string, hours int) ([]service.HistoryPoint, error) {
+	if !historyHours[hours] {
+		return nil, &service.Error{Code: "bad_args", Message: "hours 仅支持 24（一天）或 168（一周）"}
+	}
+	if !openCodeWindowKeys[windowKey] && !windowKeyRe.MatchString(windowKey) {
+		return nil, &service.Error{Code: "bad_args", Message: "windowKey 形如 TOKENS_LIMIT:3:5 或 OpenCode 窗口 rolling/weekly/monthly"}
+	}
 	svc, err := b.rt.CurrentService()
 	if err != nil {
 		return nil, err
 	}
-	if !historyHours[hours] {
-		return nil, &service.Error{Code: "bad_args", Message: "hours 仅支持 24（一天）或 168（一周）"}
-	}
-	if !windowKeyRe.MatchString(windowKey) {
-		return nil, &service.Error{Code: "bad_args", Message: "windowKey 形如 TOKENS_LIMIT:3:5"}
+	if openCodeWindowKeys[windowKey] {
+		return svc.ReadOpenCodeHistory(windowKey, time.Now().Add(-time.Duration(hours)*time.Hour))
 	}
 	return svc.ReadHistory(windowKey, time.Now().Add(-time.Duration(hours)*time.Hour))
 }
 
 // HistoryWindows 返回近 7 天出现过的窗口（历史页选择器）。
 func (b *BindingsService) HistoryWindows() ([]service.HistoryWindow, error) {
+	if b.rt.ActiveProvider() == ProviderOpenCode {
+		return service.OpenCodeHistoryWindows(), nil
+	}
 	svc, err := b.rt.CurrentService()
 	if err != nil {
 		return nil, err

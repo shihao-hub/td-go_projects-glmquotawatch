@@ -18,9 +18,10 @@ const (
 
 // DaemonHooks 是 daemon 运行期回调；所有字段 nil 安全。
 type DaemonHooks struct {
-	OnSample      func(StatusView) // 每轮采样成功后收到视图
-	OnError       func(error)      // 每轮采样失败时收到业务错误
-	OnNotifyError func(error)      // Toast 或告警状态写入失败时收到业务错误
+	OnSample         func(StatusView)         // 每轮采样成功后收到视图
+	OnError          func(error)              // 每轮采样失败时收到业务错误
+	OnNotifyError    func(error)              // Toast 或告警状态写入失败时收到业务错误
+	OnOpenCodeSample func(OpenCodeStatusView) // 每轮 OpenCode 采样成功后收到视图
 }
 
 // pendingAlert 保存发送失败后仍待确认的告警。
@@ -62,7 +63,7 @@ func (s *Service) RunDaemon(ctx context.Context, n Notifier, log *slog.Logger, h
 		return nil
 	}
 
-	sample := func() {
+	sampleGLM := func() {
 		sctx, cancel := context.WithTimeout(ctx, sampleTimeout)
 		result, err := s.sample(sctx, false)
 		cancel()
@@ -147,6 +148,29 @@ func (s *Service) RunDaemon(ctx context.Context, n Notifier, log *slog.Logger, h
 		if hooks.OnSample != nil {
 			hooks.OnSample(result.view(true))
 		}
+	}
+
+	sampleOpenCode := func() {
+		if !s.HasOpenCodeToken() || ctx.Err() != nil {
+			return
+		}
+		ocCtx, ocCancel := context.WithTimeout(ctx, 15*time.Second)
+		defer ocCancel()
+		ocView, ocErr := s.SampleOpenCodeOnce(ocCtx)
+		if ocErr != nil {
+			if ctx.Err() == nil {
+				log.Warn("OpenCode Go 采样失败（保持运行，下轮重试）", "err", ocErr)
+			}
+			return
+		}
+		if hooks.OnOpenCodeSample != nil {
+			hooks.OnOpenCodeSample(ocView)
+		}
+	}
+
+	sample := func() {
+		sampleGLM()
+		sampleOpenCode()
 	}
 
 	sample()

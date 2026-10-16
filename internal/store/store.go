@@ -1,4 +1,4 @@
-﻿// Package store 负责 glmquotawatch-gui 的本地持久化：config.json（配置）、
+// Package store 负责 glmquotawatch-gui 的本地持久化：config.json（配置）、
 // state.json（已告警档位记录）、samples-*.jsonl（采样历史）。
 // 数据目录为 %APPDATA%\language_projects\glmquotawatch-gui\，取不到 AppData 时
 // 回退 ~/.language_projects/glmquotawatch-gui/；写入采用 临时文件+重命名 保证原子性。
@@ -170,6 +170,31 @@ func (s *Store) AppendSample(now time.Time, data json.RawMessage) (string, error
 	return path, nil
 }
 
+// AppendOpenCodeSample 把一次 OpenCode Go 采样的上游 data 原文追加到当月历史文件
+// opencode-samples-YYYY-MM.jsonl（本地时区分月），返回文件路径。
+func (s *Store) AppendOpenCodeSample(now time.Time, data json.RawMessage) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	path := filepath.Join(s.dir, "opencode-samples-"+now.Format("2006-01")+".jsonl")
+	line := struct {
+		Ts   string          `json:"ts"`
+		Data json.RawMessage `json:"data"`
+	}{Ts: now.Format(time.RFC3339), Data: data}
+	b, err := json.Marshal(line)
+	if err != nil {
+		return "", err
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.Write(append(b, '\n')); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 // ListSampleFiles 返回覆盖 since 时点起的采样历史文件路径（按月文件名升序）。
 // 按文件名月份判断归属：当月文件的月末 >= since 即纳入（粗粒度，行级过滤由
 // 调用方完成）。目录不存在返回空列表。
@@ -194,6 +219,35 @@ func (s *Store) ListSampleFiles(since time.Time) ([]string, error) {
 			continue // 命名异常的历史文件跳过
 		}
 		// 文件覆盖 [月初, 次月初)，与 since 区间有交集即纳入
+		if month.AddDate(0, 1, 0).After(since) {
+			out = append(out, filepath.Join(s.dir, name))
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// ListOpenCodeSampleFiles 返回覆盖 since 时点起的 OpenCode 采样历史文件路径（按月文件名升序）。
+func (s *Store) ListOpenCodeSampleFiles(since time.Time) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, err := os.ReadDir(s.dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasPrefix(name, "opencode-samples-") || !strings.HasSuffix(name, ".jsonl") {
+			continue
+		}
+		month, perr := time.ParseInLocation("2006-01", strings.TrimSuffix(strings.TrimPrefix(name, "opencode-samples-"), ".jsonl"), time.Local)
+		if perr != nil {
+			continue
+		}
 		if month.AddDate(0, 1, 0).After(since) {
 			out = append(out, filepath.Join(s.dir, name))
 		}

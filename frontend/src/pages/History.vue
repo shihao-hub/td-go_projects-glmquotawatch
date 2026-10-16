@@ -1,10 +1,18 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 // History：高定 ECharts 折线走势 + 精致胶囊选择器 + 拒绝原生糙感下拉
+// 支持 GLM 与 OpenCode Go 历史采样曲线分流与动态主题色呈现
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import * as echarts from "echarts";
 import { bindings } from "../api";
 import type { HistoryPoint, HistoryWindow } from "../api";
-import { store, isDemo, activeProvider } from "../store";
+import {
+  store,
+  isDemo,
+  activeProvider,
+  ocHasToken,
+  goOpenCodeSettings,
+  sampleOpenCodeNow,
+} from "../store";
 
 const windows = ref<HistoryWindow[]>([]);
 const winKey = ref("");
@@ -14,7 +22,11 @@ const empty = ref(false);
 const chartEl = ref<HTMLDivElement | null>(null);
 let chart: echarts.ECharts | null = null;
 
+const isOpencode = computed(() => activeProvider.value === "opencode");
 const thresholds = computed(() => store.state?.config?.thresholds ?? [50, 60, 80, 90]);
+const markThresholds = computed(() =>
+  isOpencode.value ? [60, 85] : thresholds.value,
+);
 
 async function loadWindows() {
   try {
@@ -59,6 +71,17 @@ function render(pts: HistoryPoint[]) {
 }
 
 function option(pts: HistoryPoint[]): echarts.EChartsOption {
+  const lineColor = isOpencode.value ? "#d97706" : "#0d9468";
+  const areaColor = isOpencode.value
+    ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+        { offset: 0, color: "rgba(217,119,6,0.18)" },
+        { offset: 1, color: "rgba(217,119,6,0.01)" },
+      ])
+    : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+        { offset: 0, color: "rgba(13,148,104,0.14)" },
+        { offset: 1, color: "rgba(13,148,104,0.01)" },
+      ]);
+
   return {
     backgroundColor: "transparent",
     grid: { left: 42, right: 20, top: 20, bottom: 28 },
@@ -93,18 +116,18 @@ function option(pts: HistoryPoint[]): echarts.EChartsOption {
         showSymbol: false,
         smooth: 0.15,
         step: false,
-        lineStyle: { color: "#0d9468", width: 2 },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: "rgba(13,148,104,0.14)" },
-            { offset: 1, color: "rgba(13,148,104,0.01)" },
-          ]),
-        },
+        lineStyle: { color: lineColor, width: 2 },
+        areaStyle: { color: areaColor },
         data: pts.map((p) => [p.ts, p.pct]),
         markLine: {
           silent: true,
           symbol: "none",
-          lineStyle: { color: "#c25e00", type: "dashed", width: 1, opacity: 0.6 },
+          lineStyle: {
+            color: isOpencode.value ? "#ea580c" : "#c25e00",
+            type: "dashed",
+            width: 1,
+            opacity: 0.6,
+          },
           label: {
             position: "end",
             color: "#8b97a2",
@@ -112,7 +135,7 @@ function option(pts: HistoryPoint[]): echarts.EChartsOption {
             formatter: "{c}% 梯级",
             padding: [0, 4, 0, 0],
           },
-          data: thresholds.value.map((t) => ({ yAxis: t })),
+          data: markThresholds.value.map((t) => ({ yAxis: t })),
         },
       },
     ],
@@ -126,9 +149,26 @@ async function reload() {
 
 watch([winKey, hours], () => void load());
 watch(
-  () => store.state?.status?.sampled_at,
+  [
+    () => store.state?.status?.sampled_at,
+    () => store.state?.opencode_status?.sampled_at,
+  ],
   () => {
     if (store.tab === "history") void load();
+  },
+);
+watch(activeProvider, () => {
+  winKey.value = "";
+  void reload();
+});
+watch(
+  () => store.tab,
+  (tab) => {
+    if (tab === "history") {
+      void reload().then(() => {
+        nextTick(() => chart?.resize());
+      });
+    }
   },
 );
 
@@ -143,34 +183,7 @@ void reload();
 </script>
 
 <template>
-  <!-- 历史走势为 GLM 专属数据页：OpenCode Provider 下第一步无历史记录（spec Out of Scope），
-       展示明确空状态避免与 GLM 曲线混淆（结构与 GLM 未绑定引导卡一致） -->
-  <div v-if="activeProvider === 'opencode'" class="mx-auto flex max-w-4xl flex-col gap-3.5">
-    <div
-      class="flex flex-col items-center justify-center rounded-2xl border border-edge-strong bg-panel px-6 py-12 text-center shadow-card inset-highlight"
-    >
-      <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-well text-dim shadow-inner">
-        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-        </svg>
-      </div>
-      <h3 class="mt-3 text-sm font-semibold text-ink">OpenCode Go 暂未记录历史走势</h3>
-      <p class="mt-1 max-w-sm text-xs text-dim">
-        第一步仅提供即时采样与实时额度查看，历史轨迹收集将在后续迭代提供。
-      </p>
-      <button
-        class="btn-press mt-5 inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-medium text-white shadow-subtle hover:bg-brand-deep"
-        @click="store.tab = 'dashboard'"
-      >
-        <span>返回仪表盘采样</span>
-        <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M5 12h14M12 5l7 7-7 7" />
-        </svg>
-      </button>
-    </div>
-  </div>
-
-  <div v-else class="mx-auto flex max-w-4xl flex-col gap-3.5">
+  <div class="mx-auto flex max-w-4xl flex-col gap-3.5">
     <!-- 过滤器栏：Linear 式胶囊切换 -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-1.5">
@@ -223,10 +236,37 @@ void reload();
             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
           </svg>
         </div>
-        <p class="mt-2.5 text-xs font-medium text-ink">所选时间跨度内暂无轨迹记录</p>
-        <p class="mt-1 text-[11px] text-faint">
-          {{ isDemo ? "沙盒正在后台以 60 倍速率回放，请稍候几秒等待点阵汇入。" : "监控守护进程将随着每次探测周期自动描绘折线。" }}
-        </p>
+
+        <template v-if="isOpencode && !ocHasToken">
+          <p class="mt-2.5 text-xs font-medium text-ink">尚未配置 OpenCode API Key</p>
+          <p class="mt-1 text-[11px] text-faint">请在偏好配置中配置 API Key 以开启额度监控与历史走势记录。</p>
+          <button
+            class="btn-press mt-4 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-1.5 text-xs font-medium text-white shadow-subtle hover:bg-brand-deep"
+            @click="goOpenCodeSettings"
+          >
+            前往配置 API Key
+          </button>
+        </template>
+
+        <template v-else>
+          <p class="mt-2.5 text-xs font-medium text-ink">所选时间跨度内暂无轨迹记录</p>
+          <p class="mt-1 max-w-sm text-[11px] text-faint">
+            {{
+              isOpencode
+                ? "监控守护进程将随着每次探测周期自动描绘折线，也可随时立即采样汇入数据。"
+                : isDemo
+                  ? "沙盒正在后台以 60 倍速率回放，请稍候几秒等待点阵汇入。"
+                  : "监控守护进程将随着每次探测周期自动描绘折线。"
+            }}
+          </p>
+          <button
+            v-if="isOpencode"
+            class="btn-press mt-4 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-1.5 text-xs font-medium text-white shadow-subtle hover:bg-brand-deep"
+            @click="sampleOpenCodeNow"
+          >
+            立即采样汇入数据
+          </button>
+        </template>
       </div>
 
       <div

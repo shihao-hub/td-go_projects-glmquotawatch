@@ -256,9 +256,10 @@ func (r *MonitorRuntime) startDaemonLocked() {
 	go func() {
 		defer close(done)
 		_ = svc.RunDaemon(ctx, notifier, log, service.DaemonHooks{
-			OnSample:      r.onSample,
-			OnError:       r.onError,
-			OnNotifyError: r.onNotifyError,
+			OnSample:         r.onSample,
+			OnError:          r.onError,
+			OnNotifyError:    r.onNotifyError,
+			OnOpenCodeSample: r.onOpenCodeSample,
 		})
 	}()
 }
@@ -285,6 +286,14 @@ func (r *MonitorRuntime) onSample(view service.StatusView) {
 	if r.ui != nil {
 		r.ui.SetTooltip(r.tooltipText())
 	}
+}
+
+func (r *MonitorRuntime) onOpenCodeSample(view service.OpenCodeStatusView) {
+	r.mu.Lock()
+	v := view
+	r.lastOpenCode = &v
+	r.mu.Unlock()
+	r.app.Event.Emit(EventOpenCodeStat, v)
 }
 
 func (r *MonitorRuntime) onError(err error) {
@@ -390,6 +399,16 @@ func (r *MonitorRuntime) SetActiveProvider(provider string) error {
 	r.mu.Unlock()
 	r.app.Event.Emit(EventProvider, map[string]string{"provider": provider})
 	return nil
+}
+
+// ActiveProvider 返回当前生效的 Provider（glm / opencode）。
+func (r *MonitorRuntime) ActiveProvider() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.activeProvider == "" {
+		return ProviderGLM
+	}
+	return r.activeProvider
 }
 
 // SampleOpenCodeNow 立即探测一次 OpenCode Go 用量（真实网络；不落历史、不告警）。

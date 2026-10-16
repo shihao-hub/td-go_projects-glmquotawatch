@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"glmquotawatch-gui/internal/api"
+	"glmquotawatch-gui/internal/opencode"
 	"glmquotawatch-gui/internal/quota"
 )
 
@@ -150,3 +151,75 @@ func scanWindowKeys(path string) ([]HistoryWindow, error) {
 	}
 	return out, scanner.Err()
 }
+
+// OpenCodeHistoryWindows 返回 OpenCode Go 三大观察窗口（供前端窗口选择器）。
+func OpenCodeHistoryWindows() []HistoryWindow {
+	return []HistoryWindow{
+		{Key: "rolling", Label: "滑动短期窗口"},
+		{Key: "weekly", Label: "本周窗口"},
+		{Key: "monthly", Label: "本月窗口"},
+	}
+}
+
+// ReadOpenCodeHistory 读取自 since 起指定 OpenCode 窗口的百分比历史（按时间升序）。
+// windowName 为 "rolling" | "weekly" | "monthly"；无数据返回空切片。
+func (s *Service) ReadOpenCodeHistory(windowName string, since time.Time) ([]HistoryPoint, error) {
+	files, err := s.st.ListOpenCodeSampleFiles(since)
+	if err != nil {
+		return nil, errf("internal", "列出 OpenCode 采样历史失败: %v", err)
+	}
+	points := make([]HistoryPoint, 0, 256)
+	for _, path := range files {
+		pts, rerr := parseOpenCodeHistoryFile(path, windowName, since)
+		if rerr != nil {
+			continue
+		}
+		points = append(points, pts...)
+	}
+	sort.Slice(points, func(i, j int) bool { return points[i].Ts.Before(points[j].Ts) })
+	return points, nil
+}
+
+func parseOpenCodeHistoryFile(path, windowName string, since time.Time) ([]HistoryPoint, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	r := io.LimitReader(f, maxHistoryFileBytes)
+
+	var out []HistoryPoint
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 64*1024), 1<<20)
+	for scanner.Scan() {
+		var line struct {
+			Ts   string          `json:"ts"`
+			Data json.RawMessage `json:"data"`
+		}
+		if jerr := json.Unmarshal(scanner.Bytes(), &line); jerr != nil {
+			continue
+		}
+		ts, terr := time.Parse(time.RFC3339, line.Ts)
+		if terr != nil || ts.Before(since) {
+			continue
+		}
+		var usage opencode.Usage
+		if jerr := json.Unmarshal(line.Data, &usage); jerr != nil {
+			continue
+		}
+		var pct int
+		switch windowName {
+		case "rolling":
+			pct = usage.Rolling.Percent
+		case "weekly":
+			pct = usage.Weekly.Percent
+		case "monthly":
+			pct = usage.Monthly.Percent
+		default:
+			continue
+		}
+		out = append(out, HistoryPoint{Ts: ts, Pct: int64(pct)})
+	}
+	return out, scanner.Err()
+}
+
