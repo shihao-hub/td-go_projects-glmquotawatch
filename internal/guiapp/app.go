@@ -1,13 +1,19 @@
-﻿// Package guiapp 是 glmquotawatch-gui 的 Wails v3 组装层：
+// Package guiapp 是 glmquotawatch-gui 的 Wails v3 组装层：
 // 窗口/托盘/单实例/关窗到托盘/通知/开机自启/演示模式运行时/前端绑定。
 // 业务规则全部在 internal/service，本包只做装配与转发。
 package guiapp
 
 import (
 	"embed"
+	"path/filepath"
+	"runtime"
+	"runtime/debug"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"glmquotawatch-gui/internal/env"
+	"glmquotawatch-gui/internal/store"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -35,6 +41,12 @@ func Run(opts RunOptions) {
 	bindings := &BindingsService{}
 	ns := notifications.New()
 
+	userDataDir, _ := store.DefaultDir()
+	var webviewDataPath string
+	if userDataDir != "" {
+		webviewDataPath = filepath.Join(userDataDir, "webview2")
+	}
+
 	var a *App // OnSecondInstanceLaunch 闭包晚绑定
 	app := application.New(application.Options{
 		Name:        "glmquotawatch-gui",
@@ -45,6 +57,17 @@ func Run(opts RunOptions) {
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(opts.Assets),
+		},
+		Windows: application.WindowsOptions{
+			DisableQuitOnLastWindowClosed: true,
+			WebviewUserDataPath:           webviewDataPath,
+			AdditionalBrowserArgs: []string{
+				"--disable-gpu",
+				"--disable-gpu-compositing",
+				"--disable-software-rasterizer",
+				"--renderer-process-limit=1",
+				"--disable-features=NetworkServiceOutOfProcess",
+			},
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: env.SingleInstanceID(),
@@ -67,7 +90,9 @@ func Run(opts RunOptions) {
 	a.rt = newMonitorRuntime(app, ns)
 	bindings.rt = a.rt // 晚绑定：服务方法在 app 启动后才会被前端调用
 
-	a.buildWindow(opts.Hidden)
+	if !opts.Hidden {
+		a.buildWindow(false)
+	}
 	a.buildTray()
 	a.rt.SetUI(a) // 托盘就绪后接外观桥
 	a.rt.Start(opts.Demo)
@@ -82,6 +107,7 @@ type App struct {
 	app         *application.App
 	rt          *MonitorRuntime
 	icon        []byte
+	winMu       sync.Mutex
 	win         *application.WebviewWindow
 	exiting     atomic.Bool // true 时放行窗口关闭（真退出）
 	tray        *application.SystemTray
@@ -90,46 +116,83 @@ type App struct {
 	demoItem    *application.MenuItem
 }
 
-// buildWindow 创建主窗并挂关窗到托盘钩子。
-func (a *App) buildWindow(hidden bool) {
+// createWindowLocked 创建主窗并挂关窗释放钩子（调用方需持有 a.winMu）。
+func (a *App) createWindowLocked(hidden bool) {
 	a.win = a.app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            env.WindowTitle(),
 		Width:            920,
 		Height:           560,
 		MinWidth:         720,
 		MinHeight:        460,
-		Hidden:           hidden, // --hidden 静默启动（开机自启）
+		Hidden:           hidden,
 		URL:              "/",
 		BackgroundColour: application.NewRGB(246, 248, 247),
 	})
-	// 关窗到托盘：hook 先于内置销毁监听器执行，Cancel 阻止销毁
+
+	// 关窗释放：放行销毁以关闭 WebView2 释放 Chromium 进程，触发 GC 归还系统内存
 	a.win.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		if a.exiting.Load() {
 			return // 真退出放行
 		}
-		event.Cancel()
-		a.win.Hide()
+		// 不调用 event.Cancel()，放行让 Wails 销毁原生窗口并关闭 WebView2
+		a.winMu.Lock()
+		a.win = nil
+		a.winMu.Unlock()
+
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			runtime.GC()
+			debug.FreeOSMemory()
+		}()
 	})
 }
 
-// ensureMainWindow 显示主窗；若窗口已被销毁（beta 行为偏差兜底）则重建。
-func (a *App) ensureMainWindow() {
-	if a.win != nil && a.win.IsVisible() {
-		a.win.Focus()
-		return
+// buildWindow 创建主窗。
+func (a *App) buildWindow(hidden bool) {
+	a.winMu.Lock()
+	defer a.winMu.Unlock()
+	a.createWindowLocked(hidden)
+}
+
+// isWindowAlive 判断当前主窗口实例是否存在且未被销毁。
+func (a *App) isWindowAlive() bool {
+	if a.win == nil {
+		return false
 	}
-	if a.win != nil {
+	_, exists := a.app.Window.GetByID(a.win.ID())
+	return exists
+}
+
+// ensureMainWindow 显示主窗；若窗口不存在或已被销毁，则按需重建。
+func (a *App) ensureMainWindow() {
+	a.winMu.Lock()
+	defer a.winMu.Unlock()
+
+	if a.isWindowAlive() {
+		if a.win.IsMinimised() {
+			a.win.UnMinimise()
+		}
 		a.win.Show()
 		a.win.Focus()
 		return
 	}
-	// 窗口意外销毁：按原参数重建（兜底路径，正常不触达）
-	a.buildWindow(false)
+
+	a.createWindowLocked(false)
+	if a.win != nil {
+		a.win.Show()
+		a.win.Focus()
+	}
 }
 
 // quit 托盘「退出」：放行窗口关闭 → 停监控 → 退出应用。
 func (a *App) quit() {
 	a.exiting.Store(true)
 	a.rt.Stop()
+	a.winMu.Lock()
+	if a.win != nil && a.isWindowAlive() {
+		a.win.Close()
+	}
+	a.win = nil
+	a.winMu.Unlock()
 	a.app.Quit()
 }
