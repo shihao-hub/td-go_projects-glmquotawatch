@@ -3,26 +3,26 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "glmquotawatch-gui.exe"
+name: "glmquotawatch.exe"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.1.0"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "A glmquotawatch-gui application"
+description: "A glmquotawatch application"
 vendor: "My Company"
 homepage: "https://wails.io"
 license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/glmquotawatch-gui.exe"
-    dst: "/usr/local/bin/glmquotawatch-gui.exe"
+  - src: "./bin/glmquotawatch.exe"
+    dst: "/usr/local/bin/glmquotawatch.exe"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/glmquotawatch-gui.exe.png"
-  - src: "./build/linux/glmquotawatch-gui.exe.desktop"
-    dst: "/usr/share/applications/glmquotawatch-gui.exe.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/glmquotawatch.exe.png"
+  - src: "./build/linux/glmquotawatch.exe.desktop"
+    dst: "/usr/share/applications/glmquotawatch.exe.desktop"
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:

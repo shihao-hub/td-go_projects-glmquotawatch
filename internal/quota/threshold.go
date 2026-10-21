@@ -8,8 +8,8 @@ import (
 	"sort"
 	"time"
 
-	"glmquotawatch-gui/internal/api"
-	"glmquotawatch-gui/internal/store"
+	"glmquotawatch/internal/api"
+	"glmquotawatch/internal/store"
 )
 
 // AlertTitle 阈值告警通知标题。

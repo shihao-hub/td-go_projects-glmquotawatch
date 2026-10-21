@@ -1,4 +1,4 @@
-module glmquotawatch-gui
+module glmquotawatch
 
 go 1.26.0
 

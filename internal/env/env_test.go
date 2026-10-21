@@ -4,7 +4,7 @@ import "testing"
 
 func TestEnvProperties(t *testing.T) {
 	if IsDev() {
-		if SingleInstanceID() != "shihao.langproj.glmquotawatch-gui.dev" {
+		if SingleInstanceID() != "shihao.langproj.glmquotawatch.dev" {
 			t.Errorf("unexpected dev single instance id: %s", SingleInstanceID())
 		}
 		if DataSubDir() != "dev" {
@@ -14,7 +14,7 @@ func TestEnvProperties(t *testing.T) {
 			t.Errorf("dev should not allow autostart")
 		}
 	} else {
-		if SingleInstanceID() != "shihao.langproj.glmquotawatch-gui" {
+		if SingleInstanceID() != "shihao.langproj.glmquotawatch" {
 			t.Errorf("unexpected prod single instance id: %s", SingleInstanceID())
 		}
 		if DataSubDir() != "prod" {

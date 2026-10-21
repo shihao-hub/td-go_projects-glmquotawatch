@@ -1,4 +1,4 @@
-﻿# glmquotawatch-gui
+﻿# glmquotawatch
 
 智谱 GLM（bigmodel）编码套餐用量监控的**桌面 GUI 工具**（Wails v3 + 托盘常驻）：定时采样各额度窗口用量，跨越阈值档位（默认 50/60/80/90%）时弹原生 Windows Toast 告警；主窗仪表盘 + 历史趋势曲线；内置 60 倍速演示模式。归档项目 `glmquotawatch`（CLI 版）的 GUI 复活版。
 
@@ -11,13 +11,13 @@
 前置：Go 1.25+、Node.js 20+、wails3 CLI（`go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.25`）。
 
 ```powershell
-cd go_projects\glmquotawatch-gui
+cd go_projects\glmquotawatch
 npm install                           # 首次，在 frontend/ 内
 
-# 生产构建（产出 bin\glmquotawatch-gui.exe，数据目录 \prod，启用开机自启）：
+# 生产构建（产出 bin\glmquotawatch.exe，数据目录 \prod，启用开机自启）：
 uv run scripts/build-prod.py
 
-# 开发构建（产出 bin\glmquotawatch-gui-dev.exe，数据目录 \dev，独立单例互斥，禁用开机自启）：
+# 开发构建（产出 bin\glmquotawatch-dev.exe，数据目录 \dev，独立单例互斥，禁用开机自启）：
 uv run scripts/build-dev.py
 
 wails3 dev                            # 开发调试模式（前端热更新）
@@ -45,9 +45,9 @@ wails3 dev                            # 开发调试模式（前端热更新）
 ## CLI（恒 JSON）
 
 ```powershell
-.\bin\glmquotawatch-gui.exe token set <你的GLM_API_TOKEN>   # 配置后 GUI/CLI 共用
-.\bin\glmquotawatch-gui.exe status                          # 立即采样一次
-.\bin\glmquotawatch-gui.exe schema                          # CLI 契约目录（零 I/O）
+.\bin\glmquotawatch.exe token set <你的GLM_API_TOKEN>   # 配置后 GUI/CLI 共用
+.\bin\glmquotawatch.exe status                          # 立即采样一次
+.\bin\glmquotawatch.exe schema                          # CLI 契约目录（零 I/O）
 ```
 
 - 全部命令 stdout 恒输出 `{"ok":true,"data":…}` / `{"ok":false,"error":{"code","message"}}`（`--help`/`--version` 亦信封化）；退出码 0 成功 / 1 业务失败 / 2 参数错误。
@@ -56,7 +56,7 @@ wails3 dev                            # 开发调试模式（前端热更新）
 
 ## 数据目录
 
-`%APPDATA%\language_projects\glmquotawatch-gui\<prod|dev>\`：根据运行版本自动路由隔离。含 `config.json`（token 明文本机保存）、`state.json`（已告警档位记录）、`samples-YYYY-MM.jsonl`（采样历史）；`demo\` 子目录为演示数据（每次进入演示清空重建）。环境变量 `GLMQUOTAWATCH_GUI_API_BASE` 可覆盖上游地址（默认 `https://open.bigmodel.cn`）。
+`%APPDATA%\language_projects\glmquotawatch\<prod|dev>\`：根据运行版本自动路由隔离。含 `config.json`（token 明文本机保存）、`state.json`（已告警档位记录）、`samples-YYYY-MM.jsonl`（采样历史）；`demo\` 子目录为演示数据（每次进入演示清空重建）。环境变量 `GLMQUOTAWATCH_GUI_API_BASE` 可覆盖上游地址（默认 `https://open.bigmodel.cn`）。
 
 ## Wails beta 升级必回归项
 

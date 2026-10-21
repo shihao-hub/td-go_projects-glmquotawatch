@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"glmquotawatch-gui/internal/env"
+	"glmquotawatch/internal/env"
 )
 
 func TestDefaultDirUsesAppData(t *testing.T) {
@@ -18,7 +18,7 @@ func TestDefaultDirUsesAppData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DefaultDir: %v", err)
 	}
-	want := filepath.Join(tmp, "language_projects", "glmquotawatch-gui", env.DataSubDir())
+	want := filepath.Join(tmp, "language_projects", "glmquotawatch", env.DataSubDir())
 	if dir != want {
 		t.Fatalf("数据目录不符: got %s want %s", dir, want)
 	}
@@ -31,7 +31,7 @@ func TestDefaultDirFallsBackHome(t *testing.T) {
 		t.Fatalf("DefaultDir: %v", err)
 	}
 	home, _ := os.UserHomeDir()
-	want := filepath.Join(home, ".language_projects", "glmquotawatch-gui", env.DataSubDir())
+	want := filepath.Join(home, ".language_projects", "glmquotawatch", env.DataSubDir())
 	if dir != want {
 		t.Fatalf("回退目录不符: got %s want %s", dir, want)
 	}

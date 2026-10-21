@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"glmquotawatch-gui/internal/api"
-	"glmquotawatch-gui/internal/quota"
-	"glmquotawatch-gui/internal/store"
+	"glmquotawatch/internal/api"
+	"glmquotawatch/internal/quota"
+	"glmquotawatch/internal/store"
 )
 
 // fakeNotifier 捕获 daemon 发出的通知（真实通知依赖 Wails 服务，不进单测）。

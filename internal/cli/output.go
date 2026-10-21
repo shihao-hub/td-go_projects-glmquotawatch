@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"glmquotawatch-gui/internal/service"
+	"glmquotawatch/internal/service"
 
 	"github.com/spf13/cobra"
 )

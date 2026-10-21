@@ -1,4 +1,4 @@
-// runtime.go：监控模式运行时——normal/demo 双态管理、daemon 生命周期、
+﻿// runtime.go：监控模式运行时——normal/demo 双态管理、daemon 生命周期、
 // 事件推送（status / sample-error / mode-changed / config-changed）、
 // 托盘联动（经 uiBridge 单向更新）与通知适配。
 package guiapp
@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"glmquotawatch-gui/internal/api"
-	"glmquotawatch-gui/internal/opencode"
-	"glmquotawatch-gui/internal/service"
-	"glmquotawatch-gui/internal/store"
+	"glmquotawatch/internal/api"
+	"glmquotawatch/internal/opencode"
+	"glmquotawatch/internal/service"
+	"glmquotawatch/internal/store"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -47,13 +47,18 @@ const (
 )
 
 // uiBridge runtime → GUI 外观的单向更新接口（App 实现；测试可注入 fake）。
-type uiBridge interface {
+// UIBridge runtime -> GUI 外观的单向更新接口（App 实现；测试可注入 fake）。
+type UIBridge interface {
 	SetTooltip(text string)
 	SetSilentChecked(checked bool)
 	SetAutostartChecked(checked bool)
 	SetDemoMode(demo bool)
 	NotifyError(title, message string)
+	SetAutostart(enabled bool) error
+	AutostartEnabled() bool
 }
+
+type uiBridge = UIBridge
 
 // toastNotifier Wails 通知适配器：实现 service.Notifier。
 // silent=true 仍发通知但无声（与归档版 Audio=Silent 语义一致）。
@@ -63,7 +68,7 @@ type toastNotifier struct {
 
 func (t toastNotifier) Notify(title, msg string, silent bool) error {
 	opts := notifications.NotificationOptions{
-		ID:    fmt.Sprintf("glmquotawatch-gui-%d", time.Now().UnixNano()),
+		ID:    fmt.Sprintf("glmquotawatch-%d", time.Now().UnixNano()),
 		Title: title,
 		Body:  msg,
 	}
@@ -97,7 +102,16 @@ type ErrInfo struct {
 	Message string `json:"message"`
 }
 
-// newMonitorRuntime 构造运行时（Start 之前不触碰任何数据目录）。
+// NewMonitorRuntime 构造运行时（Start 之前不触碰任何数据目录）。
+func NewMonitorRuntime(app *application.App, ns *notifications.NotificationService) *MonitorRuntime {
+	return &MonitorRuntime{
+		app:            app,
+		ns:             ns,
+		mode:           ModeNormal,
+		activeProvider: ProviderGLM,
+	}
+}
+
 func newMonitorRuntime(app *application.App, ns *notifications.NotificationService) *MonitorRuntime {
 	return &MonitorRuntime{
 		app:            app,
@@ -463,19 +477,23 @@ func (r *MonitorRuntime) ToggleSilent() error {
 // ToggleAutostart 切换开机自启（托盘菜单用）。
 func (r *MonitorRuntime) ToggleAutostart() error {
 	enabled := r.AutostartEnabled()
-	err := setAutostart(r.app, !enabled)
+	if r.ui == nil {
+		return fmt.Errorf("ui not ready")
+	}
+	err := r.ui.SetAutostart(!enabled)
 	if err != nil {
 		return err
 	}
-	if r.ui != nil {
-		r.ui.SetAutostartChecked(!enabled)
-	}
+	r.ui.SetAutostartChecked(!enabled)
 	return nil
 }
 
 // AutostartEnabled 查询自启注册状态。
 func (r *MonitorRuntime) AutostartEnabled() bool {
-	return autostartEnabled(r.app)
+	if r.ui != nil {
+		return r.ui.AutostartEnabled()
+	}
+	return false
 }
 
 // CurrentService 返回当前模式 service（bindings 只读写经此）。
@@ -495,7 +513,7 @@ func (r *MonitorRuntime) Snapshot() GUIState {
 	st := GUIState{
 		Mode:             r.mode,
 		DemoTotalSeconds: int(api.DemoRealDuration.Seconds()),
-		Autostart:        autostartEnabled(r.app),
+		Autostart:        r.AutostartEnabled(),
 		ActiveProvider:   r.activeProvider,
 	}
 	if r.lastStatus != nil {

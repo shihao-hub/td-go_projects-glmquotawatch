@@ -1,4 +1,4 @@
-﻿// Package cli 是 glmquotawatch-gui 的机器友好薄壳（cobra）：
+﻿// Package cli 是 glmquotawatch 的机器友好薄壳（cobra）：
 // 所有命令恒输出 JSON 信封（面向脚本/AI，不提供人读模式）；
 // 每个命令只做「解析 → service → 信封输出 → 退出码」，
 // 业务规则全部在 service 层。GUI 是面向人的入口。
@@ -12,14 +12,15 @@ import (
 	"sync"
 	"time"
 
-	"glmquotawatch-gui/internal/service"
-	"glmquotawatch-gui/internal/store"
+	"glmquotawatch/internal/app"
+	"glmquotawatch/internal/service"
+	"glmquotawatch/internal/store"
 
 	"github.com/spf13/cobra"
 )
 
 // Version 版本号，构建时经 -ldflags 注入。
-var Version = "dev"
+var Version = app.Version
 
 // mustService 惰性组装业务服务（help/version/schema 不触发数据目录创建之外的开销）。
 var (
@@ -43,8 +44,6 @@ func mustService() (*service.Service, error) {
 // Run 执行 CLI 并返回进程退出码：0 成功、1 业务失败、2 参数/flag 错误。
 // help/version 同样以 JSON 信封输出（stdout 恒纯 JSON）。
 func Run(args []string) int {
-	AttachParentConsole()
-	defer DetachParentConsole()
 	root := newRootCmd()
 	root.SetArgs(args) // 不传则 cobra 默认读 os.Args[1:]，进程内调用（测试）会错乱
 	err := root.ExecuteContext(context.Background())
@@ -63,10 +62,10 @@ func Run(args []string) int {
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:     "glmquotawatch-gui",
+		Use:     "glmquotawatch-cli",
 		Short:   "GLM 编码套餐用量采样与阈值告警（GUI 工具的机器友好 CLI 壳，恒 JSON 输出）",
 		Version: Version,
-		Long: "glmquotawatch-gui 的 CLI 壳面向脚本与 AI 消费：所有命令 stdout 恒输出 JSON 信封\n" +
+		Long: "glmquotawatch 的 CLI 壳面向脚本与 AI 消费：所有命令 stdout 恒输出 JSON 信封\n" +
 			"{\"ok\":true,\"data\":…} / {\"ok\":false,\"error\":{\"code\",\"message\"}}，退出码 0/1/2。\n" +
 			"面向人的入口是 GUI（无参数启动本程序）。",
 		SilenceErrors: true,
@@ -196,9 +195,9 @@ func configCmd() *cobra.Command {
 		Use:   "set <key> <value>",
 		Short: "修改单个配置键（interval / thresholds / hysteresis / silent）",
 		Args:  cobra.ExactArgs(2),
-		Example: `  glmquotawatch-gui config set interval 90s
-  glmquotawatch-gui config set thresholds 50,60,80,90
-  glmquotawatch-gui config set silent true`,
+		Example: `  glmquotawatch config set interval 90s
+  glmquotawatch config set thresholds 50,60,80,90
+  glmquotawatch config set silent true`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := mustService()
 			if err != nil {

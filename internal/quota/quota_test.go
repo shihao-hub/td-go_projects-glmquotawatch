@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"glmquotawatch-gui/internal/api"
-	"glmquotawatch-gui/internal/store"
+	"glmquotawatch/internal/api"
+	"glmquotawatch/internal/store"
 )
 
 var (

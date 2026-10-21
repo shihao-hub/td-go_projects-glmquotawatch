@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"glmquotawatch-gui/internal/opencode"
-	"glmquotawatch-gui/internal/quota"
-	"glmquotawatch-gui/internal/store"
+	"glmquotawatch/internal/opencode"
+	"glmquotawatch/internal/quota"
+	"glmquotawatch/internal/store"
 )
 
 // EnvOpenCodeAPIKey 本地配置为空时的临时回退环境变量（FR-2）。

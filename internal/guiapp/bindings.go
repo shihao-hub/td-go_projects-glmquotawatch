@@ -1,13 +1,14 @@
-// bindings.go：前端绑定服务（application.Service）。
+﻿// bindings.go：前端绑定服务（application.Service）。
 // 全部方法只做参数转发与结果装配，业务规则在 service 层；
 // demo 模式下配置类写操作服务端拒绝（不依赖前端禁用，评审 R-11）。
 package guiapp
 
 import (
+	"fmt"
 	"regexp"
 	"time"
 
-	"glmquotawatch-gui/internal/service"
+	"glmquotawatch/internal/service"
 )
 
 // 历史范围白名单（小时）；windowKey 形如 TOKENS_LIMIT:3:5 或 OpenCode 窗口 rolling/weekly/monthly。
@@ -31,9 +32,14 @@ type GUIState struct {
 	Autostart        bool                         `json:"autostart"`
 }
 
-// BindingsService 前端可调用方法的宿主（wails3 生成 TS bindings）。
+// BindingsService 前端可调用方法的主宿（wails3 生成 TS bindings）。
 type BindingsService struct {
 	rt *MonitorRuntime
+}
+
+// SetRuntime 注入监控运行时。
+func (b *BindingsService) SetRuntime(rt *MonitorRuntime) {
+	b.rt = rt
 }
 
 // GetState 返回全量状态快照。
@@ -81,7 +87,7 @@ func (b *BindingsService) SetConfig(key, value string) (service.ConfigView, erro
 	}
 	view, err := svc.SetConfig(key, value)
 	b.emitConfig(err == nil)
-	if err == nil && key == "silent" {
+	if err == nil && key == "silent" && b.rt.ui != nil {
 		b.rt.ui.SetSilentChecked(view.Silent)
 	}
 	return view, err
@@ -169,7 +175,10 @@ func (b *BindingsService) ExitDemo() error { return b.rt.ExitDemo() }
 
 // SetAutostart 设置开机自启（设置/托盘共用；dev 期临时产物拒绝注册）。
 func (b *BindingsService) SetAutostart(enabled bool) error {
-	return setAutostart(b.rt.app, enabled)
+	if b.rt == nil || b.rt.ui == nil {
+		return fmt.Errorf("ui not ready")
+	}
+	return b.rt.ui.SetAutostart(enabled)
 }
 
 // requireNormal demo 模式下拒绝配置类写操作（演示口径只读）。

@@ -11,9 +11,9 @@ import (
 	"sort"
 	"time"
 
-	"glmquotawatch-gui/internal/api"
-	"glmquotawatch-gui/internal/opencode"
-	"glmquotawatch-gui/internal/quota"
+	"glmquotawatch/internal/api"
+	"glmquotawatch/internal/opencode"
+	"glmquotawatch/internal/quota"
 )
 
 // maxHistoryFileBytes 单个历史文件读取上限，防异常膨胀文件拖垮进程。

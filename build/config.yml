@@ -6,8 +6,8 @@ version: '3'
 # This information is used to generate the build assets.
 info:
   companyName: "shihao-hub" # The name of the company
-  productName: "glmquotawatch-gui" # The name of the application
-  productIdentifier: "shihao.langproj.glmquotawatch-gui" # The unique product identifier
+  productName: "glmquotawatch" # The name of the application
+  productIdentifier: "shihao.langproj.glmquotawatch" # The unique product identifier
   description: "GLM 编码套餐用量监控（托盘常驻 + 阈值 Toast 告警）" # The application description
   copyright: "(c) 2026, shihao-hub" # Copyright text
   comments: "归档项目 glmquotawatch 的 GUI 复活版" # Comments

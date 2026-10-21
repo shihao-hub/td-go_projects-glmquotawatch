@@ -8,7 +8,7 @@
         AllowPromptForPassword="false">
     </Settings>
     <Installer
-        Path="glmquotawatch-gui.exe"
+        Path="glmquotawatch.exe"
         Arguments=""
         InstallLocation="C:\Program Files\My Company\My Product">
     </Installer>
@@ -18,7 +18,7 @@
         PublisherName="CN=My Company"
         PublisherDisplayName="My Company"
         Version="0.1.0.0"
-        PackageDescription="A glmquotawatch-gui application">
+        PackageDescription="A glmquotawatch application">
         <Capabilities>
             <Capability Name="runFullTrust" />
             
@@ -26,9 +26,9 @@
         <Applications>
             <Application
                 Id="com.example.glmquotawatchgui"
-                Description="A glmquotawatch-gui application"
+                Description="A glmquotawatch application"
                 DisplayName="My Product"
-                ExecutableName="glmquotawatch-gui.exe"
+                ExecutableName="glmquotawatch.exe"
                 EntryPoint="Windows.FullTrustApplication">
                 
             </Application>
@@ -43,11 +43,11 @@
             <Framework>false</Framework>
             <DisplayName>My Product</DisplayName>
             <PublisherDisplayName>My Company</PublisherDisplayName>
-            <Description>A glmquotawatch-gui application</Description>
+            <Description>A glmquotawatch application</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>
-    <SaveLocation PackagePath="glmquotawatch-gui.msix" />
+    <SaveLocation PackagePath="glmquotawatch.msix" />
     <PackageIntegrity>
         <CertificatePath></CertificatePath>
     </PackageIntegrity>

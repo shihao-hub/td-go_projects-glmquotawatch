@@ -119,7 +119,7 @@ def render_vector_icon(size=1024, style='cyan_coral', shape='squircle'):
     return img_out
 
 def save_all_variants():
-    build_dir = r'D:\Users\language_projects\go_projects\glmquotawatch-gui\build'
+    build_dir = r'D:\Users\language_projects\go_projects\glmquotawatch\build'
     brain_dir = r'C:\Users\29580\.gemini\antigravity-acp\brain\0ed9efac-7410-4b0e-b220-47f0c320d977'
     os.makedirs(brain_dir, exist_ok=True)
     

@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"glmquotawatch-gui/internal/store"
+	"glmquotawatch/internal/store"
 )
 
 const validToken = "8db97e3da78c44abb0a72ce3ae423209.xK2juMP0d8xb236g"

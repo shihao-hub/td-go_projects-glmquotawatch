@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"glmquotawatch-gui/internal/quota"
-	"glmquotawatch-gui/internal/store"
+	"glmquotawatch/internal/quota"
+	"glmquotawatch/internal/store"
 )
 
 const (

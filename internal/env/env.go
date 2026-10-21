@@ -11,9 +11,9 @@ const (
 // SingleInstanceID 返回用于单例互斥的唯一 ID。
 func SingleInstanceID() string {
 	if IsDev() {
-		return "shihao.langproj.glmquotawatch-gui.dev"
+		return "shihao.langproj.glmquotawatch.dev"
 	}
-	return "shihao.langproj.glmquotawatch-gui"
+	return "shihao.langproj.glmquotawatch"
 }
 
 // WindowTitle 返回 GUI 主窗口标题。

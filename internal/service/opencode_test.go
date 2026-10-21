@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"glmquotawatch-gui/internal/store"
+	"glmquotawatch/internal/store"
 )
 
 const ocTestToken = "oc_sk_test_0123456789abcdef"

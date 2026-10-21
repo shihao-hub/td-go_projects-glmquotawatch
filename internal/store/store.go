@@ -1,7 +1,7 @@
-// Package store 负责 glmquotawatch-gui 的本地持久化：config.json（配置）、
+// Package store 负责 glmquotawatch 的本地持久化：config.json（配置）、
 // state.json（已告警档位记录）、samples-*.jsonl（采样历史）。
-// 数据目录为 %APPDATA%\language_projects\glmquotawatch-gui\，取不到 AppData 时
-// 回退 ~/.language_projects/glmquotawatch-gui/；写入采用 临时文件+重命名 保证原子性。
+// 数据目录为 %APPDATA%\language_projects\glmquotawatch\，取不到 AppData 时
+// 回退 ~/.language_projects/glmquotawatch/；写入采用 临时文件+重命名 保证原子性。
 // 单实例由 Wails SingleInstance 保证（GUI），CLI 子命令为一次性进程，
 // 故不再需要归档版的 daemon.lock 跨进程锁。
 package store
@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"glmquotawatch-gui/internal/env"
+	"glmquotawatch/internal/env"
 )
 
 // Config 工具配置（config.json）。业务校验（时长/阈值范围等）在 service 层，
@@ -67,18 +67,18 @@ func Open(dir string) (*Store, error) {
 func (s *Store) Dir() string { return s.dir }
 
 // DefaultDir 返回默认数据目录：
-// %APPDATA%\language_projects\glmquotawatch-gui\<dev|prod>，取不到 AppData 时回退
-// ~/.language_projects/glmquotawatch-gui/<dev|prod>。
+// %APPDATA%\language_projects\glmquotawatch\<dev|prod>，取不到 AppData 时回退
+// ~/.language_projects/glmquotawatch/<dev|prod>。
 func DefaultDir() (string, error) {
 	subDir := env.DataSubDir()
 	if appData := os.Getenv("AppData"); appData != "" {
-		return filepath.Join(appData, "language_projects", "glmquotawatch-gui", subDir), nil
+		return filepath.Join(appData, "language_projects", "glmquotawatch", subDir), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("定位数据目录失败: %w", err)
 	}
-	return filepath.Join(home, ".language_projects", "glmquotawatch-gui", subDir), nil
+	return filepath.Join(home, ".language_projects", "glmquotawatch", subDir), nil
 }
 
 func (s *Store) configPath() string { return filepath.Join(s.dir, "config.json") }

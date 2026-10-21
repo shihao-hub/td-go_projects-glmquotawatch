@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"glmquotawatch-gui/internal/service"
+	"glmquotawatch/internal/service"
 )
 
 // SetActiveProvider 未识别值应 bad_args（校验先于任何 app 交互，无 GUI 环境可测）。

@@ -1,4 +1,4 @@
-// Package service 承载 glmquotawatch-gui 的业务用例：参数校验 + store/api/quota
+// Package service 承载 glmquotawatch 的业务用例：参数校验 + store/api/quota
 // 编排，输入输出均为纯 Go 类型。不做任何标准流输出与 os.Exit——
 // GUI 绑定层与 CLI 壳共用本包，是唯一业务真相源。
 package service
@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"glmquotawatch-gui/internal/api"
-	"glmquotawatch-gui/internal/opencode"
-	"glmquotawatch-gui/internal/quota"
-	"glmquotawatch-gui/internal/store"
+	"glmquotawatch/internal/api"
+	"glmquotawatch/internal/opencode"
+	"glmquotawatch/internal/quota"
+	"glmquotawatch/internal/store"
 )
 
 // Error 业务错误：Code 供 CLI JSON 包络与 GUI 错误展示共用（格式

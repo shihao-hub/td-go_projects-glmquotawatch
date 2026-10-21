@@ -83,7 +83,7 @@ var builtinCommands = map[string]bool{"help": true, "completion": true}
 func BuildSchemaDoc() (*schemaDoc, error) {
 	root := newRootCmd()
 	doc := &schemaDoc{
-		Name:      "glmquotawatch-gui",
+		Name:      "glmquotawatch",
 		Version:   Version,
 		Interface: "cli",
 		Envelope: schemaEnvelope{

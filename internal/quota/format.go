@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"glmquotawatch-gui/internal/api"
+	"glmquotawatch/internal/api"
 )
 
 // FormatResetIn 把距下次刷新的时长格式化为人读短文本：
