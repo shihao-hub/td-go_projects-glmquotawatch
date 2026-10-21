@@ -29,10 +29,10 @@ const (
 	ModeDemo   = "demo"
 )
 
-// Provider 常量（前端 Provider 切换器）。
+// Provider 常量（前端 Provider 切换器；真相源在 service 包，此处仅别名）。
 const (
-	ProviderGLM      = "glm"
-	ProviderOpenCode = "opencode"
+	ProviderGLM      = service.ProviderGLM
+	ProviderOpenCode = service.ProviderOpenCode
 )
 
 // 事件名常量（前端 Events.On 使用同一组名字）。
@@ -112,15 +112,6 @@ func NewMonitorRuntime(app *application.App, ns *notifications.NotificationServi
 	}
 }
 
-func newMonitorRuntime(app *application.App, ns *notifications.NotificationService) *MonitorRuntime {
-	return &MonitorRuntime{
-		app:            app,
-		ns:             ns,
-		mode:           ModeNormal,
-		activeProvider: ProviderGLM,
-	}
-}
-
 // SetUI 注入外观桥（App 构建托盘后调用；仅启动阶段写一次）。
 func (r *MonitorRuntime) SetUI(ui uiBridge) { r.ui = ui }
 
@@ -178,6 +169,8 @@ func (r *MonitorRuntime) startNormal() {
 	r.mode = ModeNormal
 	r.svc = svc
 	r.lastErr = nil
+	// 恢复上次停留的 Provider（持久化在 config.json，重启后不再固定回到 GLM）。
+	r.activeProvider = svc.GetActiveProvider()
 	r.startDaemonLocked()
 	if r.ui != nil {
 		r.ui.SetDemoMode(false)
@@ -404,14 +397,28 @@ func (r *MonitorRuntime) SampleNow() (service.StatusView, error) {
 }
 
 // SetActiveProvider 切换前端 Provider（glm / opencode）；未识别值报 bad_args。
+// 先更新内存态再落盘：落盘失败不阻断本次切换（内存已生效），只记入 lastErr
+// 由界面提示，避免“点了没反应”的死手感。同时写入 config.json 做重启记忆。
 func (r *MonitorRuntime) SetActiveProvider(provider string) error {
 	if provider != ProviderGLM && provider != ProviderOpenCode {
 		return &service.Error{Code: "bad_args", Message: fmt.Sprintf("未知 Provider %q，仅支持 glm / opencode", provider)}
 	}
 	r.mu.Lock()
 	r.activeProvider = provider
+	svc := r.svc
 	r.mu.Unlock()
-	r.app.Event.Emit(EventProvider, map[string]string{"provider": provider})
+
+	if svc != nil {
+		if err := svc.SetActiveProvider(provider); err != nil {
+			r.mu.Lock()
+			e := ErrInfo{Code: "provider_save_failed", Message: err.Error()}
+			r.lastErr = &e
+			r.mu.Unlock()
+		}
+	}
+	if r.app != nil {
+		r.app.Event.Emit(EventProvider, map[string]string{"provider": provider})
+	}
 	return nil
 }
 
@@ -507,13 +514,17 @@ func (r *MonitorRuntime) CurrentService() (*service.Service, error) {
 }
 
 // Snapshot 汇总 GUI 状态（GetState 用）。
+// 约定：只要 service 已启动，Config 与 OpenCodeConfig 恒非 nil（配置不可读时
+// 下发降级占位视图并把原因记入 last_error），避免前端把 null 误判成“未初始化”
+// 而永久停在加载态；自启状态查询（系统注册表）在加锁前完成，缩短持锁时间。
 func (r *MonitorRuntime) Snapshot() GUIState {
+	autostart := r.AutostartEnabled()
+
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	st := GUIState{
 		Mode:             r.mode,
 		DemoTotalSeconds: int(api.DemoRealDuration.Seconds()),
-		Autostart:        r.AutostartEnabled(),
+		Autostart:        autostart,
 		ActiveProvider:   r.activeProvider,
 	}
 	if r.lastStatus != nil {
@@ -528,15 +539,23 @@ func (r *MonitorRuntime) Snapshot() GUIState {
 		v := *r.lastOpenCode
 		st.OpenCodeStatus = &v
 	}
-	if r.svc != nil {
-		if cfg, err := r.svc.GetConfig(); err == nil {
-			st.Config = &cfg
-		}
-		oc := r.svc.GetOpenCodeConfig()
-		st.OpenCodeConfig = &oc
-	}
 	if r.mode == ModeDemo {
 		st.DemoEndsAt = r.demoEndsAt.Format(time.RFC3339)
+	}
+	svc := r.svc
+	r.mu.Unlock()
+
+	if svc != nil {
+		if cfg, err := svc.GetConfig(); err == nil {
+			st.Config = &cfg
+		} else {
+			st.Config = &service.ConfigView{Dir: svc.DataDir()}
+			if st.LastError == nil {
+				st.LastError = &ErrInfo{Code: "config_read_failed", Message: err.Error()}
+			}
+		}
+		oc := svc.GetOpenCodeConfig()
+		st.OpenCodeConfig = &oc
 	}
 	return st
 }

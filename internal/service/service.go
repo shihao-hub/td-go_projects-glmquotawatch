@@ -89,7 +89,7 @@ func (r sampleResult) view(committed bool) StatusView {
 type Service struct {
 	st              *store.Store
 	baseURL         string
-	openCodeBaseURL string           // OpenCode Go 上游（空值时用 opencode.DefaultBaseURL）
+	openCodeBaseURL string             // OpenCode Go 上游（空值时用 opencode.DefaultBaseURL）
 	fetcherFactory  func() api.Fetcher // nil 时默认按 config token 现读构造 Client
 	fixedInterval   time.Duration      // 非零时 daemon 直用该间隔（演示模式），跳过热加载与 clamp
 }
@@ -197,6 +197,47 @@ func (s *Service) GetConfig() (ConfigView, error) {
 
 // configSetKeys config set 支持的键（供错误提示与校验）。
 var configSetKeys = []string{"interval", "thresholds", "hysteresis", "silent"}
+
+// Provider 常量：GUI 顶栏切换器与持久化共用同一组取值。
+const (
+	ProviderGLM      = "glm"
+	ProviderOpenCode = "opencode"
+)
+
+// GetActiveProvider 返回持久化的 Provider 选择；缺省/脏数据一律回落 glm。
+func (s *Service) GetActiveProvider() string {
+	cfg, err := s.st.LoadConfig()
+	if err != nil {
+		return ProviderGLM
+	}
+	if cfg.ActiveProvider == ProviderOpenCode {
+		return ProviderOpenCode
+	}
+	return ProviderGLM
+}
+
+// SetActiveProvider 持久化 Provider 选择（顶栏切换与重启记忆的唯一真相）；
+// 未识别取值报 bad_args。
+func (s *Service) SetActiveProvider(provider string) error {
+	if provider != ProviderGLM && provider != ProviderOpenCode {
+		return errf("bad_args", "未知 Provider %q，仅支持 glm / opencode", provider)
+	}
+	cfg, err := s.st.LoadConfig()
+	if err != nil {
+		return errf("internal", "读取配置失败: %v", err)
+	}
+	if cfg.ActiveProvider == provider {
+		return nil
+	}
+	cfg.ActiveProvider = provider
+	if err := s.st.SaveConfig(cfg); err != nil {
+		return errf("internal", "保存配置失败: %v", err)
+	}
+	return nil
+}
+
+// DataDir 返回数据目录（GUI 快照在配置不可读时仍需下发目录以便定位问题）。
+func (s *Service) DataDir() string { return s.st.Dir() }
 
 // SetConfig 修改单个配置键，校验规则：
 // interval 正时长 clamp [30s, 24h]；thresholds 逗号分隔 1..99 排序去重；

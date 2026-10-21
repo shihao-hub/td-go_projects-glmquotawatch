@@ -2,6 +2,8 @@ package guiapp
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"glmquotawatch/internal/service"
@@ -61,3 +63,51 @@ func TestBindingsReadHistoryArgs(t *testing.T) {
 	}
 }
 
+// TestSetActiveProviderPersists 切换 Provider 须落盘到 config.json（重启记忆），
+// 且 app 未就绪（测试环境）时不得 panic。
+func TestSetActiveProviderPersists(t *testing.T) {
+	dir := t.TempDir()
+	svc, err := service.Open(dir)
+	if err != nil {
+		t.Fatalf("service.Open: %v", err)
+	}
+	rt := &MonitorRuntime{svc: svc, activeProvider: ProviderGLM}
+
+	if err := rt.SetActiveProvider(ProviderOpenCode); err != nil {
+		t.Fatalf("SetActiveProvider: %v", err)
+	}
+	if rt.ActiveProvider() != ProviderOpenCode {
+		t.Fatalf("内存态应为 opencode: %s", rt.ActiveProvider())
+	}
+	if got := svc.GetActiveProvider(); got != ProviderOpenCode {
+		t.Fatalf("应已落盘为 opencode: %s", got)
+	}
+}
+
+// TestSnapshotConfigNeverNil 配置不可读时快照仍下发降级 ConfigView（非 nil），
+// 避免前端把 null 误判成「未初始化」而永久停在加载态。
+func TestSnapshotConfigNeverNil(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte("{oops"), 0o600); err != nil {
+		t.Fatalf("写坏配置失败: %v", err)
+	}
+	svc, err := service.Open(dir)
+	if err != nil {
+		t.Fatalf("service.Open: %v", err)
+	}
+	rt := &MonitorRuntime{svc: svc, mode: ModeNormal, activeProvider: ProviderGLM}
+
+	st := rt.Snapshot()
+	if st.Config == nil {
+		t.Fatalf("Config 不应为 nil")
+	}
+	if st.Config.HasToken {
+		t.Fatalf("降级视图不应声称有 token")
+	}
+	if st.Config.Dir != dir {
+		t.Fatalf("降级视图应带数据目录: %s", st.Config.Dir)
+	}
+	if st.LastError == nil || st.LastError.Code != "config_read_failed" {
+		t.Fatalf("应记录配置读取失败: %+v", st.LastError)
+	}
+}

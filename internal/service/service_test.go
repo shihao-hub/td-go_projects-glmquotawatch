@@ -293,3 +293,45 @@ func TestViewThresholdsNeverNull(t *testing.T) {
 		t.Fatalf("thresholds 应序列化为 [] 而非 null: %s", b)
 	}
 }
+
+// TestActiveProviderPersisted 顶栏 Provider 选择须落盘并在重建 Service 后复现：
+// 重启记忆依赖 config.json 的 active_provider 字段，脏值一律回落 glm。
+func TestActiveProviderPersisted(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	svc := New(st)
+
+	if got := svc.GetActiveProvider(); got != ProviderGLM {
+		t.Fatalf("缺省应为 glm: %s", got)
+	}
+	if err := svc.SetActiveProvider(ProviderOpenCode); err != nil {
+		t.Fatalf("SetActiveProvider: %v", err)
+	}
+
+	// 重新打开（模拟重启）
+	st2, err := store.Open(dir)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	if got := New(st2).GetActiveProvider(); got != ProviderOpenCode {
+		t.Fatalf("重启后应恢复 opencode: %s", got)
+	}
+
+	if err := svc.SetActiveProvider("foo"); svcErrCode(t, err) != "bad_args" {
+		t.Fatalf("未知 Provider 应 bad_args: %v", err)
+	}
+	if got := svc.GetActiveProvider(); got != ProviderOpenCode {
+		t.Fatalf("非法写入不应改变已存值: %s", got)
+	}
+
+	// 手工写脏值（模拟旧版本/人为编辑）时回落 glm
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"active_provider":"bogus"}`), 0o600); err != nil {
+		t.Fatalf("写配置失败: %v", err)
+	}
+	if got := svc.GetActiveProvider(); got != ProviderGLM {
+		t.Fatalf("脏值应回落 glm: %s", got)
+	}
+}

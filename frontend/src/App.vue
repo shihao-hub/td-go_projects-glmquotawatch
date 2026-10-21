@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { onMounted } from "vue";
-import { store, refreshState, isOpenCodeView } from "./store";
+import { store, bootState, refreshState, isOpenCodeView } from "./store";
 import { useEvents } from "./composables/useEvents";
 import Dashboard from "./pages/Dashboard.vue";
 import History from "./pages/History.vue";
@@ -27,8 +27,21 @@ useEvents({
 });
 
 onMounted(() => {
-  void refreshState();
+  void bootState();
 });
+
+// 连接态文案：未拿到快照时不再假装「持续监控中」等
+function connectionText(): string {
+  if (!store.state) return store.stateError ? "后台无响应" : "正在连接后台…";
+  if (store.stateError) return "快照重连中";
+  return store.state.mode === "demo" ? "演示模式" : "持续监控中";
+}
+
+function connectionDotClass(): string {
+  if (!store.state) return store.stateError ? "bg-crit" : "bg-faint";
+  if (store.stateError) return "bg-warn";
+  return store.state.mode === "demo" ? "bg-warn" : "bg-brand";
+}
 
 // 页脚状态栏：上次采样的本地时间
 function lastSample(): string {
@@ -49,7 +62,17 @@ function lastSample(): string {
           </svg>
           <span
             class="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full"
-            :class="store.state?.mode === 'demo' ? 'bg-warn animate-pulse-subtle' : (store.state?.config?.has_token ? 'bg-brand' : 'bg-faint')"
+            :class="
+              !store.state
+                ? store.stateError
+                  ? 'bg-crit'
+                  : 'bg-faint'
+                : store.state.mode === 'demo'
+                  ? 'bg-warn animate-pulse-subtle'
+                  : store.state.config?.has_token
+                    ? 'bg-brand'
+                    : 'bg-faint'
+            "
           />
         </div>
         <div class="flex flex-col">
@@ -98,9 +121,9 @@ function lastSample(): string {
     <!-- 精细状态状态栏（类似状态微调器） -->
     <footer class="flex h-7 shrink-0 items-center justify-between border-t border-edge bg-panel px-4 text-[11px] text-dim select-none shadow-xs">
       <div class="flex items-center gap-4">
-        <div class="flex items-center gap-1.5">
-          <span class="h-1.5 w-1.5 rounded-full" :class="store.state?.mode === 'demo' ? 'bg-warn' : 'bg-brand'"></span>
-          <span class="font-medium text-ink">{{ store.state?.mode === "demo" ? "演示模式" : "持续监控中" }}</span>
+        <div class="flex items-center gap-1.5" :title="store.stateError || undefined">
+          <span class="h-1.5 w-1.5 rounded-full" :class="connectionDotClass()"></span>
+          <span class="font-medium text-ink">{{ connectionText() }}</span>
         </div>
         <span class="text-edge-strong">|</span>
         <div>
@@ -118,9 +141,15 @@ function lastSample(): string {
         <span class="text-faint">API 凭据</span>
         <span
           class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
-          :class="store.state?.config?.has_token ? 'bg-brand-light text-brand-deep' : 'bg-warn-light text-warn'"
+          :class="
+            !store.state
+              ? 'bg-well text-faint'
+              : store.state.config?.has_token
+                ? 'bg-brand-light text-brand-deep'
+                : 'bg-warn-light text-warn'
+          "
         >
-          {{ store.state?.config?.has_token ? "已就绪" : "待配置" }}
+          {{ !store.state ? "未知" : store.state.config?.has_token ? "已就绪" : "待配置" }}
         </span>
       </div>
     </footer>

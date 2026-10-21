@@ -28,6 +28,9 @@ type Config struct {
 	Thresholds    []int  `json:"thresholds"`               // 告警阈值（升序去重，1..99）
 	Hysteresis    int    `json:"hysteresis"`               // 滞回百分点：低于 min-thresholds-hysteresis 才重置告警记录
 	Silent        bool   `json:"silent"`                   // true 时通知静音（仍发送，无声）
+	// ActiveProvider GUI 顶栏 Provider 选择（glm / opencode），重启后据此恢复
+	// 上次停留的视图；空值表示沿用 glm（旧配置文件天然兼容）。
+	ActiveProvider string `json:"active_provider,omitempty"`
 }
 
 // DefaultConfig 返回默认配置。

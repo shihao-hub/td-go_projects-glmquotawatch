@@ -154,6 +154,27 @@ def build_resources(release: bool) -> int:
     return 0
 
 
+def generate_bindings() -> int:
+    """重新生成前端 bindings（Wails 调用 ID 由 Go 包路径哈希得出，
+    包路径/方法签名一变旧 bindings 就会全部失配；本步是防「前端调不通后端」的唯一保障）。"""
+    wails3 = shutil.which("wails3") or r"C:\Users\29580\go\bin\wails3.exe"
+    if not (wails3 and Path(wails3).exists()):
+        print(
+            "⚠️ 未找到 wails3，跳过 bindings 重建（若改过 Go 绑定层/模块路径，前端将全部报 unknown bound method id）",
+            file=sys.stderr,
+        )
+        return 0
+    print("🔨 [Bindings] 正在重建前端 bindings (wails3 generate bindings)...")
+    r = subprocess.run(
+        [wails3, "generate", "bindings", "-clean=true", "-ts", "-i", "./..."],
+        cwd=str(PROJECT_ROOT),
+    )
+    if r.returncode != 0:
+        print(f"❌ bindings 生成失败（exit {r.returncode}）", file=sys.stderr)
+        return r.returncode
+    return 0
+
+
 def build_frontend() -> int:
     frontend_dir = PROJECT_ROOT / "frontend"
     npm_cmd = shutil.which("npm.cmd") or shutil.which("npm") or "npm"
@@ -184,9 +205,13 @@ def main() -> int:
         print(f"❌ 拒绝发布构建：{reason}（release 需同时满足 精确 tag + 工作区干净）", file=sys.stderr)
         return 2
 
-    # 2. 前端构建
+    # 2. bindings 重建 + 前端构建（bindings 必须与当前 Go 绑定层同步，
+    #    否则 dist 里的调用 ID 会全部失配，界面表现为「永久加载 + 按钮无反应」）
     dist_dir = PROJECT_ROOT / "frontend" / "dist"
     if not args.skip_frontend or not dist_dir.exists():
+        rc = generate_bindings()
+        if rc != 0:
+            return rc
         rc = build_frontend()
         if rc != 0:
             return rc
