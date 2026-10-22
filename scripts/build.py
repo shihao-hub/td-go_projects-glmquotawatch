@@ -34,6 +34,8 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# 四个产物统一落 bin/；勿用 build/（Wails 资源目录）或 dist/（前端产物）。
+OUT_DIR = PROJECT_ROOT / "bin"
 TAG_PREFIX = ""  # 单仓项目，tag 直接为 vX.Y.Z
 RSRC_EXE = shutil.which("rsrc") or r"C:\Users\29580\go\bin\rsrc.exe"
 
@@ -42,24 +44,29 @@ MANIFEST = PROJECT_ROOT / "wails.exe.manifest"
 ICON_RELEASE = PROJECT_ROOT / "icon.ico"
 ICON_DEV = PROJECT_ROOT / "internal" / "app" / "icon_dev.ico"
 SYSO_OUT = PROJECT_ROOT / "cmd" / "glmquotawatch" / "rsrc_windows_amd64.syso"
-EXE_GUI_RELEASE = PROJECT_ROOT / "glmquotawatch-gui.exe"
-EXE_GUI_DEV = PROJECT_ROOT / "glmquotawatch-gui-dev.exe"
-EXE_CLI_RELEASE = PROJECT_ROOT / "glmquotawatch-cli.exe"
-EXE_CLI_DEV = PROJECT_ROOT / "glmquotawatch-cli-dev.exe"
+EXE_GUI_RELEASE = OUT_DIR / "glmquotawatch-gui.exe"
+EXE_GUI_DEV = OUT_DIR / "glmquotawatch-gui-dev.exe"
+EXE_CLI_RELEASE = OUT_DIR / "glmquotawatch-cli.exe"
+EXE_CLI_DEV = OUT_DIR / "glmquotawatch-cli-dev.exe"
 
+# 历史产物（旧单产物与迁移前根目录双通道产物），构建后自动清理，避免与新产物混淆。
 LEGACY_EXES = (
     PROJECT_ROOT / "glmquotawatch.exe",
     PROJECT_ROOT / "glmquotawatch-dev.exe",
     PROJECT_ROOT / "bin" / "glmquotawatch.exe",
     PROJECT_ROOT / "bin" / "glmquotawatch-dev.exe",
+    PROJECT_ROOT / "glmquotawatch-gui.exe",
+    PROJECT_ROOT / "glmquotawatch-gui-dev.exe",
+    PROJECT_ROOT / "glmquotawatch-cli.exe",
+    PROJECT_ROOT / "glmquotawatch-cli-dev.exe",
 )
 RENDER_ICON = PROJECT_ROOT / "scripts" / "render_icon.py"
 
 GENERATED_SUFFIXES = (
-    "/glmquotawatch-gui.exe",
-    "/glmquotawatch-gui-dev.exe",
-    "/glmquotawatch-cli.exe",
-    "/glmquotawatch-cli-dev.exe",
+    "/bin/glmquotawatch-gui.exe",
+    "/bin/glmquotawatch-gui-dev.exe",
+    "/bin/glmquotawatch-cli.exe",
+    "/bin/glmquotawatch-cli-dev.exe",
     "/glmquotawatch.exe",
     "/glmquotawatch-dev.exe",
     "/cmd/glmquotawatch/rsrc_windows_amd64.syso",
@@ -234,6 +241,8 @@ def main() -> int:
     )
 
     # 4. 逐通道 go build（每通道两个产物：GUI 零黑框 + Console 终端友好）
+    OUT_DIR.mkdir(parents=True, exist_ok=True)   # go build 不会自动建父目录
+
     targets = (
         (EXE_GUI_RELEASE if release else EXE_GUI_DEV, True),
         (EXE_CLI_RELEASE if release else EXE_CLI_DEV, False),
@@ -276,9 +285,17 @@ def main() -> int:
 
     # 6. 清理历史命名的单产物
     for legacy in LEGACY_EXES:
-        if legacy.exists():
+        if not legacy.exists():
+            continue
+        try:
             legacy.unlink()
-            print(f"🧹 已清理历史产物: {legacy.name}")
+        except OSError as exc:
+            print(
+                f"⚠️ 无法清理历史产物（可能仍在运行）: {legacy.relative_to(PROJECT_ROOT)} ({exc})",
+                file=sys.stderr,
+            )
+            continue
+        print(f"🧹 已清理历史产物: {legacy.relative_to(PROJECT_ROOT)}")
     return 0
 
 

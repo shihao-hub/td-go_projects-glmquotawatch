@@ -1,14 +1,10 @@
-# 构建生成物（脚本自动重建，不入库）
-/glmquotawatch-gui.exe
-/glmquotawatch-gui-dev.exe
-/glmquotawatch-cli.exe
-/glmquotawatch-cli-dev.exe
+# 构建生成物（脚本自动重建，不入库）；四个 exe 统一落 bin/
+/bin/
 /icon.ico
 /icon.png
 /cmd/glmquotawatch/rsrc_windows_amd64.syso
 
 # 历史产物
-/bin/
 *.exe
 *.exe~
 .task/

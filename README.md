@@ -14,11 +14,12 @@
 cd go_projects\glmquotawatch
 npm install                           # 首次，在 frontend/ 内
 
-# 生产构建（产出 bin\glmquotawatch.exe，数据目录 \prod，启用开机自启）：
-uv run scripts/build-prod.py
+# 生产构建（产出 bin\glmquotawatch-gui.exe + bin\glmquotawatch-cli.exe，数据目录 \prod，启用开机自启）：
+# 仅 HEAD 精确命中项目 tag 且工作区干净时允许
+uv run scripts/build.py --release
 
-# 开发构建（产出 bin\glmquotawatch-dev.exe，数据目录 \dev，独立单例互斥，禁用开机自启）：
-uv run scripts/build-dev.py
+# 开发构建（产出 bin\glmquotawatch-gui-dev.exe + bin\glmquotawatch-cli-dev.exe，数据目录 \dev，独立单例互斥，禁用开机自启）：
+uv run scripts/build.py
 
 wails3 dev                            # 开发调试模式（前端热更新）
 ```
@@ -45,9 +46,9 @@ wails3 dev                            # 开发调试模式（前端热更新）
 ## CLI（恒 JSON）
 
 ```powershell
-.\bin\glmquotawatch.exe token set <你的GLM_API_TOKEN>   # 配置后 GUI/CLI 共用
-.\bin\glmquotawatch.exe status                          # 立即采样一次
-.\bin\glmquotawatch.exe schema                          # CLI 契约目录（零 I/O）
+.\bin\glmquotawatch-cli.exe token set <你的GLM_API_TOKEN>   # 配置后 GUI/CLI 共用
+.\bin\glmquotawatch-cli.exe status                          # 立即采样一次
+.\bin\glmquotawatch-cli.exe schema                          # CLI 契约目录（零 I/O）
 ```
 
 - 全部命令 stdout 恒输出 `{"ok":true,"data":…}` / `{"ok":false,"error":{"code","message"}}`（`--help`/`--version` 亦信封化）；退出码 0 成功 / 1 业务失败 / 2 参数错误。
