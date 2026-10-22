@@ -64,6 +64,7 @@ func LaunchGUI(hidden bool, demo bool) error {
 	logf("启动 GLM 用量监控 GUI: version=%s, mode=%s, singleID=%s, hidden=%v, demo=%v", Version, BuildMode, singleID, hidden, demo)
 
 	wailsApp := application.New(application.Options{
+		Logger:      wailsLogger(),
 		Name:        "glmquotawatch",
 		Description: "GLM 编码套餐用量监控（托盘常驻 + 阈值 Toast 告警）",
 		Icon:        IconICO,
