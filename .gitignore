@@ -17,3 +17,6 @@ frontend/bindings/
 # Python 运行缓存
 __pycache__/
 *.pyc
+
+# Windows 重定向误生成的空文件
+nul
